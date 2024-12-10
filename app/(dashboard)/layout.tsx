@@ -30,7 +30,7 @@ export default function DashboardLayout({
               <SidebarTrigger className="text-zinc-400 hover:text-zinc-100" />
               <Separator orientation="vertical" className="h-6" />
               <Image src="/logo.png" width={130} height={30} alt="Logo" />
-              Mesa Propietária - Traders House
+              Mesa Propietária - Traders House FX
               <Breadcrumb />
             </div>
 

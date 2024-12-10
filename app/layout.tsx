@@ -10,7 +10,7 @@ const mulish = Mulish({
 });
 
 export const metadata: Metadata = {
-  title: "Traders House - Controle",
+  title: "Traders House FX - Controle ",
   description: "Sistema de avaliação de traders",
 };
 

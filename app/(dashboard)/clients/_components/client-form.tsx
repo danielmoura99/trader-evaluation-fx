@@ -275,9 +275,15 @@ export function ClientForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="Profit One">Profit One</SelectItem>
-                      <SelectItem value="Profit Plus">Profit Plus</SelectItem>
-                      <SelectItem value="Profit Pro">Profit Pro</SelectItem>
+                      <SelectItem value="Black Arrow One">
+                        Black Arrow One
+                      </SelectItem>
+                      <SelectItem value="Black Arrow Plus">
+                        Black Arrow Plus
+                      </SelectItem>
+                      <SelectItem value="Black Arrow Pro">
+                        Black Arrow Pro
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -298,13 +304,10 @@ export function ClientForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="TC - 50K">TC - 50K</SelectItem>
-                      <SelectItem value="TC - 100K">TC - 100K</SelectItem>
-                      <SelectItem value="TC - 250K">TC - 250K</SelectItem>
-                      <SelectItem value="TC - 500K">TC - 500K</SelectItem>
-                      <SelectItem value="Trader Estrategista">
-                        Trader Estrategista
-                      </SelectItem>
+                      <SelectItem value="FX - 5K">FX - 5K</SelectItem>
+                      <SelectItem value="FX - 10K">FX - 10K</SelectItem>
+                      <SelectItem value="FX - 25K">FX - 25K</SelectItem>
+                      <SelectItem value="FX - 50K">FX - 50K</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
