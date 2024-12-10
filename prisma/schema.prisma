@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Client {
+  id                String    @id @default(cuid())
+  name              String
+  cpf               String    
+  phone             String
+  birthDate         DateTime
+  address           String?
+  zipCode           String?
+  email             String    
+  platform          String
+  plan              String
+  traderStatus      String    // "Aguardando Inicio" | "Em Curso" | "Aprovado" | "Reprovado"
+  startDate         DateTime?
+  endDate           DateTime?
+  observation       String?
+  cancellationDate  DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  contacts          Contact[] // Nova relação
+
+  @@map("clients")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String    @unique
+  email         String    @unique
+  password      String
+  role          String    @default("USER") // Adicionado para resolver erro de tipagem
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("users")
+}
+
+model Contact {
+  id           String   @id @default(cuid())
+  clientId     String
+  client         Client   @relation(fields: [clientId], references: [id])
+  status       String   // Sem contato, Contatado, Não Interessado, Convertido
+  date         DateTime
+  notes        String
+  createdAt    DateTime @default(now())
+
+  @@map("contacts")
+}
