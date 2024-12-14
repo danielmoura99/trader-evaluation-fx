@@ -21,6 +21,7 @@ import { useState } from "react";
 import axios from "axios";
 import { useToast } from "@/hooks/use-toast";
 import { getSubscriptionPlanId } from "@/utils/plataform-helper";
+import { BROKER_CONFIG } from "@/utils/broker-config";
 
 const finishEvaluationSchema = z.object({
   status: z.enum(["Aprovado", "Reprovado"]),
@@ -56,7 +57,7 @@ export function FinishEvaluationForm({
       const cancelResponse = await axios.post("/api/broker/cancel-account", {
         document: client.cpf.replace(/\D/g, ""),
         subscriptionPlanId: getSubscriptionPlanId(client.platform),
-        testAccount: "1000380752",
+        testAccount: BROKER_CONFIG.testAccount,
       });
 
       if (!cancelResponse.data.success) {

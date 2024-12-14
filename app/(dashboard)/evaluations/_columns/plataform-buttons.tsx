@@ -1,4 +1,4 @@
-// components/platform-buttons.tsx
+// _columns/platform-buttons.tsx
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { Play } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
 import { getSubscriptionPlanId } from "@/utils/plataform-helper";
+import { BROKER_CONFIG } from "@/utils/broker-config";
 
 // Crie uma API route local para fazer a requisição
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -48,8 +49,8 @@ export function PlatformButtons({
         lastName,
         dateOfBirth: client.birthDate.toISOString().split("T")[0],
         subscriptionPlanId: getSubscriptionPlanId(client.platform),
-        testAccount: "1000380752",
-        authenticationCode: "2B295526980F475BA2A608C8C1C4F8DF",
+        testAccount: BROKER_CONFIG.testAccount,
+        authenticationCode: BROKER_CONFIG.authenticationCode,
       };
 
       const response = await createBrokerAccount(payload);

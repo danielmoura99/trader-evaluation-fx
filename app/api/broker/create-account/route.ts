@@ -14,7 +14,7 @@ export async function POST(req: Request) {
       API_GATEWAY_URL,
       {
         ...payload,
-        authenticationCode: "2B295526980F475BA2A608C8C1C4F8DF",
+        authenticationCode: "7A0005DD725F44F6B103DD805CF11BE3",
       },
       {
         headers: {
