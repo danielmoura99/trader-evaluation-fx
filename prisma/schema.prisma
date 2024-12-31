@@ -53,3 +53,22 @@ model Contact {
 
   @@map("contacts")
 }
+
+model Payment {
+  id              String    @id @default(cuid())
+  hublaPaymentId  String    @unique
+  platform        String
+  plan            String
+  amount          Int
+  customerEmail   String
+  customerName    String
+  customerPhone   String
+  customerDocument String   // Novo campo
+  status          String    // received, pending_registration, completed, cancelled
+  saleDate        DateTime
+  paymentMethod   String    // Novo campo
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("payments")
+}
