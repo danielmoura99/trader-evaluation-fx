@@ -40,9 +40,9 @@ export async function POST(req: NextRequest) {
     console.log("[Process Registration] Dados recebidos:", data);
 
     // Validar o pagamento
-    const payment = await prisma.payment.findUnique({
+    const payment = await prisma.payment.findFirst({
       where: {
-        id: data.paymentId,
+        hublaPaymentId: data.paymentId,
         status: "received",
       },
     });
