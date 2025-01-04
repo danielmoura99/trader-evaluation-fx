@@ -35,12 +35,54 @@ export async function getDashboardStats() {
       ? ((approvedClients / completedClients) * 100).toFixed(1)
       : "0.0";
 
+  const approvalRateByPlan = await prisma.client.groupBy({
+    by: ["plan"],
+    _count: {
+      id: true,
+    },
+    where: {
+      traderStatus: {
+        in: [TraderStatus.APPROVED, TraderStatus.REJECTED],
+      },
+    },
+  });
+
+  const approvedByPlan = await prisma.client.groupBy({
+    by: ["plan"],
+    _count: {
+      id: true,
+    },
+    where: {
+      traderStatus: TraderStatus.APPROVED,
+    },
+  });
+
+  const planApprovalRates = approvalRateByPlan
+    .map((plan) => {
+      const totalForPlan = plan._count.id;
+      const approvedForPlan =
+        approvedByPlan.find((p) => p.plan === plan.plan)?._count.id || 0;
+
+      return {
+        plan: plan.plan,
+        rate:
+          totalForPlan > 0
+            ? ((approvedForPlan / totalForPlan) * 100).toFixed(1)
+            : "0.0",
+        rateNumber:
+          totalForPlan > 0 ? (approvedForPlan / totalForPlan) * 100 : 0, // campo adicional para ordenação
+      };
+    })
+    .sort((a, b) => b.rateNumber - a.rateNumber) // Ordena por taxa em ordem decrescente
+    .map(({ plan, rate }) => ({ plan, rate })); // Remove o campo auxiliar rateNumber
+
   return {
     totalClients,
     awaitingClients,
     inEvaluationClients,
     completedClients,
     approvalRate,
+    planApprovalRates,
   };
 }
 
