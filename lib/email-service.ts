@@ -27,8 +27,8 @@ export async function sendRegistrationEmail({
     const info = await transporter.sendMail({
       from:
         process.env.EMAIL_FROM || '"Traders House" <noreply@tradershouse.com>',
-      // to: customerEmail, // Produção
-      to: "nao-responda@tradershouse.com.br", // Teste
+      to: customerEmail, // Produção
+      //to: "nao-responda@tradershouse.com.br", // Teste
       subject: "Complete seu Cadastro - Traders House",
       html: `
         <div style="max-width: 600px; margin: 0 auto; background-color: #121212; color: #ffffff; font-family: Arial, sans-serif;">
