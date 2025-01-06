@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
     // Processa o pagamento
     const payment = await hublaService.processPayment(paymentData);
     const registrationUrl = `${
-      process.env.CLIENT_PORTAL_URL || "http://localhost:3000"
+      process.env.CLIENT_PORTAL_URL || "https://portal.tradershouse.com.br/"
     }/registration/${payment.hublaPaymentId}`;
 
     // Adicionar envio de email
