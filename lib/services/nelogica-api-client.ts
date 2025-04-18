@@ -204,6 +204,7 @@ export class NelogicaApiClient {
       headers: {
         "Content-Type": "application/json",
       },
+      timeout: 30000, // Timeout de 30 segundos para todas as requisições
     });
   }
 
@@ -241,17 +242,33 @@ export class NelogicaApiClient {
       return;
     }
 
+    const startTime = Date.now();
+
     try {
+      const startTime = Date.now();
       this.isLoggingIn = true;
       console.log("[Nelogica API] Iniciando autenticação...");
+      console.log(`[Nelogica API] Conectando a ${this.baseUrl}`);
+
+      // Log de detalhes de conexão
+      const url = new URL(this.baseUrl);
+      console.log(
+        `[Nelogica API] Detalhes de conexão: host=${url.hostname}, port=${url.port || "default"}`
+      );
 
       const response = await this.apiClient.post<NelogicaAuthResponse>(
-        "api/v2/auth/login",
+        "/api/v2/auth/login",
         {
           username: this.username,
           password: this.password,
+        },
+        {
+          timeout: 30000, // Aumentando timeout para 30 segundos
         }
       );
+
+      const elapsedTime = Date.now() - startTime;
+      console.log(`[Nelogica API] Resposta recebida em ${elapsedTime}ms`);
 
       if (response.data.isSuccess) {
         this.token = response.data.data.token;
@@ -261,13 +278,38 @@ export class NelogicaApiClient {
           this.tokenExpiry
         );
       } else {
+        console.error(
+          `[Nelogica API] Falha na autenticação: ${response.data.message}`
+        );
         throw new Error(`Falha na autenticação: ${response.data.message}`);
       }
     } catch (error: any) {
+      const elapsedTime = Date.now() - startTime;
       console.error(
-        "[Nelogica API] Erro de autenticação:",
-        error.response?.data || error.message
+        `[Nelogica API] Erro de autenticação após ${elapsedTime}ms:`,
+        error.message
       );
+
+      // Log detalhado de erros de rede
+      if (error.isAxiosError) {
+        console.error("[Nelogica API] Detalhes do erro de rede:", {
+          code: error.code,
+          config: {
+            url: error.config?.url,
+            method: error.config?.method,
+            timeout: error.config?.timeout,
+            baseURL: error.config?.baseURL,
+          },
+          response: error.response
+            ? {
+                status: error.response.status,
+                statusText: error.response.statusText,
+                data: error.response.data,
+              }
+            : "Sem resposta",
+        });
+      }
+
       throw new Error("Falha na autenticação com a API da Nelogica");
     } finally {
       this.isLoggingIn = false;
@@ -278,31 +320,78 @@ export class NelogicaApiClient {
    * Executa uma chamada de API garantindo que estamos autenticados
    */
   private async executeApiCall<T>(apiCallFn: () => Promise<T>): Promise<T> {
+    const startTime = Date.now();
+    console.log("[Nelogica API] Iniciando execução de chamada de API");
+
     // Certifique-se de que estamos autenticados
     if (!this.isTokenValid()) {
+      console.log(
+        "[Nelogica API] Token inválido ou expirado, realizando login"
+      );
       await this.login();
+    } else {
+      console.log("[Nelogica API] Usando token existente válido");
     }
 
     try {
       // Configure o token de autenticação para esta chamada
       this.apiClient.defaults.headers.common["Authorization"] =
         `Bearer ${this.token}`;
+      console.log("[Nelogica API] Token configurado nos headers");
 
       // Execute a chamada da API
-      return await apiCallFn();
+      console.log("[Nelogica API] Executando chamada à API");
+      const result = await apiCallFn();
+
+      const elapsedTime = Date.now() - startTime;
+      console.log(
+        `[Nelogica API] Chamada concluída com sucesso em ${elapsedTime}ms`
+      );
+
+      return result;
     } catch (error: any) {
+      const elapsedTime = Date.now() - startTime;
+      console.error(
+        `[Nelogica API] Erro na chamada após ${elapsedTime}ms:`,
+        error.message
+      );
+
       // Se recebemos erro 401, o token pode ter expirado mesmo que achássemos que estava válido
       if (error.response?.status === 401) {
-        console.log("[Nelogica API] Token expirado, obtendo novo token...");
+        console.log(
+          "[Nelogica API] Token expirado (401), obtendo novo token..."
+        );
         this.token = null;
         this.tokenExpiry = null;
         await this.login();
 
         // Tenta novamente com o novo token
+        console.log("[Nelogica API] Tentando novamente com novo token");
         this.apiClient.defaults.headers.common["Authorization"] =
           `Bearer ${this.token}`;
         return await apiCallFn();
       }
+
+      // Log detalhado de erros de rede
+      if (error.isAxiosError) {
+        console.error("[Nelogica API] Detalhes do erro de rede:", {
+          code: error.code,
+          config: {
+            url: error.config?.url,
+            method: error.config?.method,
+            timeout: error.config?.timeout,
+            baseURL: error.config?.baseURL,
+          },
+          response: error.response
+            ? {
+                status: error.response.status,
+                statusText: error.response.statusText,
+                data: error.response.data,
+              }
+            : "Sem resposta",
+        });
+      }
+
       throw error;
     }
   }
@@ -790,6 +879,46 @@ export class NelogicaApiClient {
       throw new Error(
         `Falha ao atualizar cliente: ${error.response?.data?.message || error.message}`
       );
+    }
+  }
+
+  /**
+   * Testa a conectividade básica com o servidor da Nelogica
+   */
+  public async testConnectivity(): Promise<boolean> {
+    console.log(`[Nelogica API] Testando conectividade com ${this.baseUrl}`);
+    const startTime = Date.now();
+
+    try {
+      // Tenta fazer uma requisição simples sem autenticação
+      await axios.get(`${this.baseUrl}/ping`, {
+        timeout: 5000,
+        validateStatus: () => true, // Aceita qualquer status de resposta
+      });
+
+      const elapsedTime = Date.now() - startTime;
+      console.log(
+        `[Nelogica API] Conectividade confirmada em ${elapsedTime}ms`
+      );
+      return true;
+    } catch (error: any) {
+      const elapsedTime = Date.now() - startTime;
+      console.error(
+        `[Nelogica API] Falha na conectividade após ${elapsedTime}ms:`,
+        error.message
+      );
+
+      // Log detalhado de erros de rede
+      if (error.isAxiosError) {
+        console.error("[Nelogica API] Detalhes do erro de conectividade:", {
+          code: error.code,
+          message: error.message,
+          hostname: new URL(this.baseUrl).hostname,
+          port: new URL(this.baseUrl).port || "default",
+        });
+      }
+
+      return false;
     }
   }
 }

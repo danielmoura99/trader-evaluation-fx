@@ -6,12 +6,15 @@ import {
   CreateSubscriptionParams,
 } from "@/lib/services/nelogica-api-client";
 import { NELOGICA_PROFILES } from "@/lib/services/nelogica-service";
+import axios from "axios";
 
 // Configurações da API Nelogica
 const NELOGICA_API_URL =
-  process.env.NELOGICA_API_URL || "http://191.252.154.12:36302";
-const NELOGICA_USERNAME = process.env.NELOGICA_USERNAME || "seu_usuario_api"; // Use suas credenciais reais aqui
-const NELOGICA_PASSWORD = process.env.NELOGICA_PASSWORD || "sua_senha_api"; // Use suas credenciais reais aqui
+  process.env.NELOGICA_API_URL || "https://api-broker4.nelogica.com.br/";
+const NELOGICA_USERNAME =
+  process.env.NELOGICA_USERNAME || "tradersHouse.hml@nelogica"; // Use suas credenciais reais aqui
+const NELOGICA_PASSWORD =
+  process.env.NELOGICA_PASSWORD || "OJOMy4miz63YLFwOM27ZGTO5n"; // Use suas credenciais reais aqui
 //const NELOGICA_ENVIRONMENT_ID = process.env.NELOGICA_ENVIRONMENT_ID || 'environment_id';
 
 /**
@@ -393,6 +396,63 @@ export async function testNelogicaListSubscriptions() {
     };
   } catch (error) {
     console.error("Erro ao listar assinaturas Nelogica:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Erro desconhecido",
+    };
+  }
+}
+
+// Adicione essa nova função
+/**
+ * Testa apenas a conectividade básica com o servidor da Nelogica
+ */
+export async function testNelogicaConnectivity() {
+  try {
+    console.log("Iniciando teste de conectividade com a Nelogica...");
+    console.log(`Tentando conectar a ${NELOGICA_API_URL}`);
+
+    const startTime = Date.now();
+
+    // Aqui utilizamos axios diretamente para evitar dependências de autenticação
+    try {
+      // Tentamos uma conexão simples a um endpoint que responda rapidamente
+      // Muitos servidores têm um endpoint /health ou /ping para isso
+      await axios.get(`${NELOGICA_API_URL}/ping`, {
+        timeout: 5000, // timeout menor para teste rápido
+        validateStatus: () => true, // aceita qualquer status HTTP como sucesso
+      });
+
+      const elapsedTime = Date.now() - startTime;
+      console.log(`Conectividade testada com sucesso em ${elapsedTime}ms`);
+
+      return {
+        success: true,
+        elapsedTime,
+      };
+    } catch (error) {
+      const elapsedTime = Date.now() - startTime;
+      console.error(`Erro ao testar conectividade (${elapsedTime}ms):`, error);
+
+      // Log detalhado para entender melhor o problema
+      let errorDetails = "";
+      if (axios.isAxiosError(error)) {
+        errorDetails = `Code: ${error.code || "N/A"}, Message: ${error.message}`;
+        console.error("Detalhes:", {
+          code: error.code,
+          message: error.message,
+          config: error.config,
+        });
+      }
+
+      return {
+        success: false,
+        error: `Falha na conectividade: ${errorDetails}`,
+        elapsedTime,
+      };
+    }
+  } catch (error) {
+    console.error("Erro inesperado ao testar conectividade Nelogica:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Erro desconhecido",

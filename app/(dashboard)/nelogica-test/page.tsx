@@ -21,6 +21,7 @@ import {
   testNelogicaSetRisk,
   testNelogicaBlockAccount,
   testNelogicaUnblockAccount,
+  testNelogicaConnectivity,
 } from "./_actions/index";
 
 export default function NelogicaTestPage() {
@@ -69,6 +70,43 @@ export default function NelogicaTestPage() {
         addLog(`❌ Falha na autenticação: ${result.error}`);
         toast({
           title: "Falha na autenticação",
+          description: result.error,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Erro desconhecido";
+      addLog(`❌ Erro: ${errorMessage}`);
+      toast({
+        title: "Erro",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTestConnectivity = async () => {
+    setLoading(true);
+    try {
+      addLog("Testando conectividade básica com o servidor Nelogica...");
+      const result = await testNelogicaConnectivity();
+
+      if (result.success) {
+        addLog(
+          `✅ Conectividade bem-sucedida! Resposta recebida em: ${result.elapsedTime}ms`
+        );
+        toast({
+          title: "Conectividade confirmada",
+          description:
+            "Conexão básica com o servidor da Nelogica estabelecida.",
+        });
+      } else {
+        addLog(`❌ Falha na conectividade: ${result.error}`);
+        toast({
+          title: "Falha na conectividade",
           description: result.error,
           variant: "destructive",
         });
@@ -356,16 +394,24 @@ export default function NelogicaTestPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <h3 className="text-sm font-medium text-zinc-200">
-                Autenticação
+                Teste de Conexão
               </h3>
-              <Button
-                variant="outline"
-                onClick={handleAuth}
-                disabled={loading}
-                className="w-full"
-              >
-                Testar Autenticação
-              </Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleTestConnectivity}
+                  disabled={loading}
+                >
+                  Testar Conectividade
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleAuth}
+                  disabled={loading}
+                >
+                  Testar Autenticação
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2">
