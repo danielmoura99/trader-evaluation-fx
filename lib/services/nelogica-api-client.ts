@@ -198,14 +198,17 @@ export class NelogicaApiClient {
     private username: string,
     private password: string
   ) {
-    this.baseUrl = baseUrl;
+    this.baseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
     this.apiClient = axios.create({
-      baseURL: baseUrl,
+      baseURL: this.baseUrl,
       headers: {
         "Content-Type": "application/json",
+        Accept: "application/json",
       },
-      timeout: 30000, // Timeout de 30 segundos para todas as requisições
+      timeout: 10000,
     });
+
+    console.log(`[Nelogica API] Cliente inicializado para ${this.baseUrl}`);
   }
 
   private isTokenValid(): boolean {
@@ -248,12 +251,12 @@ export class NelogicaApiClient {
       const startTime = Date.now();
       this.isLoggingIn = true;
       console.log("[Nelogica API] Iniciando autenticação...");
-      console.log(`[Nelogica API] Conectando a ${this.baseUrl}`);
-
-      // Log de detalhes de conexão
-      const url = new URL(this.baseUrl);
+      // Log detalhado da requisição
       console.log(
-        `[Nelogica API] Detalhes de conexão: host=${url.hostname}, port=${url.port || "default"}`
+        `[Nelogica API] URL completa: ${this.baseUrl}/api/v2/auth/login`
+      );
+      console.log(
+        `[Nelogica API] Payload de autenticação: { username: "${this.username}", password: "${this.password}" }`
       );
 
       const response = await this.apiClient.post<NelogicaAuthResponse>(
@@ -261,9 +264,6 @@ export class NelogicaApiClient {
         {
           username: this.username,
           password: this.password,
-        },
-        {
-          timeout: 30000, // Aumentando timeout para 30 segundos
         }
       );
 
@@ -290,27 +290,34 @@ export class NelogicaApiClient {
         error.message
       );
 
-      // Log detalhado de erros de rede
+      // Log detalhado do erro
       if (error.isAxiosError) {
-        console.error("[Nelogica API] Detalhes do erro de rede:", {
+        console.error("[Nelogica API] Detalhes do erro:", {
+          message: error.message,
           code: error.code,
-          config: {
-            url: error.config?.url,
-            method: error.config?.method,
-            timeout: error.config?.timeout,
-            baseURL: error.config?.baseURL,
+          request: {
+            url: `${this.baseUrl}/api/v2/auth/login`,
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            data: { username: this.username, password: "[REDACTED]" },
           },
           response: error.response
             ? {
                 status: error.response.status,
                 statusText: error.response.statusText,
+                headers: error.response.headers,
                 data: error.response.data,
               }
-            : "Sem resposta",
+            : "No response",
         });
+      } else {
+        console.error("[Nelogica API] Erro não Axios:", error);
       }
 
-      throw new Error("Falha na autenticação com a API da Nelogica");
+      throw new Error(`Falha na autenticação: ${error.message}`);
     } finally {
       this.isLoggingIn = false;
     }

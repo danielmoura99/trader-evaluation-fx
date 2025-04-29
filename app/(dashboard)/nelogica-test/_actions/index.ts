@@ -10,11 +10,11 @@ import axios from "axios";
 
 // Configurações da API Nelogica
 const NELOGICA_API_URL =
-  process.env.NELOGICA_API_URL || "https://api-broker4.nelogica.com.br/";
+  process.env.NELOGICA_API_URL || "https://api-broker4-v2.nelogica.com.br";
 const NELOGICA_USERNAME =
-  process.env.NELOGICA_USERNAME || "tradersHouse.hml@nelogica"; // Use suas credenciais reais aqui
+  process.env.NELOGICA_USERNAME || "tradersHouse.hml@nelogica";
 const NELOGICA_PASSWORD =
-  process.env.NELOGICA_PASSWORD || "OJOMy4miz63YLFwOM27ZGTO5n"; // Use suas credenciais reais aqui
+  process.env.NELOGICA_PASSWORD || "OJOMy4miz63YLFwOM27ZGTO5n";
 //const NELOGICA_ENVIRONMENT_ID = process.env.NELOGICA_ENVIRONMENT_ID || 'environment_id';
 
 /**
@@ -364,11 +364,11 @@ export async function testNelogicaListEnvironments() {
 }
 
 /**
- * Testa a listagem de assinaturas na Nelogica
+ * Testa a listagem de assinaturas e contas na Nelogica
  */
 export async function testNelogicaListSubscriptions() {
   try {
-    console.log("Iniciando listagem de assinaturas na Nelogica...");
+    console.log("Iniciando listagem de assinaturas e contas na Nelogica...");
 
     const apiClient = new NelogicaApiClient(
       NELOGICA_API_URL,
@@ -376,7 +376,10 @@ export async function testNelogicaListSubscriptions() {
       NELOGICA_PASSWORD
     );
 
-    const response = await apiClient.listSubscriptions();
+    const response = await apiClient.listSubscriptions({
+      pageNumber: 1,
+      pageSize: 50,
+    });
 
     if (!response.isSuccess) {
       return {
@@ -386,7 +389,7 @@ export async function testNelogicaListSubscriptions() {
     }
 
     console.log(
-      "Assinaturas listadas com sucesso:",
+      "Assinaturas e contas listadas com sucesso:",
       response.data.subscriptions
     );
 
