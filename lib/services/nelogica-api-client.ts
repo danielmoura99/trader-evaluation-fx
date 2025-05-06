@@ -103,6 +103,7 @@ interface NelogicaSubscriptionsResponse extends NelogicaBaseResponse {
       licenseId: string;
       customerId: string;
       createdAt: string;
+      planId: string;
       accounts: {
         account: string;
         name: string;
@@ -128,6 +129,7 @@ interface NelogicaCreateRiskResponse extends NelogicaBaseResponse {
  */
 
 export interface CreateSubscriptionParams {
+  planId: string;
   firstName: string;
   lastName: string;
   gender?: number;
@@ -158,6 +160,7 @@ export interface CreateSubscriptionParams {
 export interface CreateAccountParams {
   name: string;
   profileId: string;
+  accountType?: number; // 0: Desafio (padrão), 1: Financiada/Real
 }
 
 export interface RiskProfileParams {
@@ -926,6 +929,36 @@ export class NelogicaApiClient {
       }
 
       return false;
+    }
+  }
+  /**
+   * Obtém detalhes de um cliente
+   */
+  public async getCustomerDetails(
+    customerId: string
+  ): Promise<NelogicaGenericResponse> {
+    try {
+      console.log("[Nelogica API] Obtendo detalhes do cliente:", customerId);
+
+      return await this.executeApiCall(async () => {
+        const response = await this.apiClient.get<NelogicaGenericResponse>(
+          `api/v2/manager/customers/${customerId}`
+        );
+
+        if (response.data.isSuccess) {
+          console.log("[Nelogica API] Detalhes do cliente obtidos com sucesso");
+        }
+
+        return response.data;
+      });
+    } catch (error: any) {
+      console.error(
+        "[Nelogica API] Erro ao obter detalhes do cliente:",
+        error.response?.data || error.message
+      );
+      throw new Error(
+        `Falha ao obter detalhes do cliente: ${error.response?.data?.message || error.message}`
+      );
     }
   }
 }

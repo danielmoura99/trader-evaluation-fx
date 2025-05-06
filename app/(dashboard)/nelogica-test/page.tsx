@@ -28,12 +28,16 @@ import {
   testNelogicaListEnvironments,
   testNelogicaListSubscriptions,
 } from "./_actions/index";
+import { NelogicaMonitor } from "./_components/nelogica-monitor";
+import { RiskProfileForm } from "./_components/risk-profile-form";
 
 export default function NelogicaTestPage() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState("connection");
+  const [accountType, setAccountType] = useState<number>(0); // 0: Desafio (padrão)
+  const [createdProfileId, setCreatedProfileId] = useState("");
 
   // Dados do formulário para criação de cliente/assinatura
   const [formData, setFormData] = useState({
@@ -242,6 +246,7 @@ export default function NelogicaTestPage() {
         licenseId: responseData.licenseId,
         name: `${formData.firstName} ${formData.lastName}`,
         plan: formData.plan,
+        accountType: accountType,
       });
 
       if (result.success) {
@@ -551,6 +556,7 @@ export default function NelogicaTestPage() {
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="mb-4 w-full">
                 <TabsTrigger value="connection">Conexão</TabsTrigger>
+                <TabsTrigger value="risk-profile">Perfil de Risco</TabsTrigger>
                 <TabsTrigger value="subscription">Assinatura</TabsTrigger>
                 <TabsTrigger value="account">Conta</TabsTrigger>
                 <TabsTrigger value="risk">Perfil de Risco</TabsTrigger>
@@ -595,6 +601,58 @@ export default function NelogicaTestPage() {
                       Próximo: Criar Assinatura →
                     </Button>
                   </div>
+                </div>
+              </TabsContent>
+
+              {/* Tab Perfil de Risco */}
+              <TabsContent value="risk-profile" className="space-y-4">
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium text-zinc-200">
+                    Criação de Perfil de Risco
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    Crie um perfil de risco para usar nas contas
+                  </p>
+
+                  <RiskProfileForm
+                    onSuccess={(profileId) => {
+                      setCreatedProfileId(profileId);
+                      toast({
+                        title: "Perfil de risco criado",
+                        description: `Perfil de risco criado com sucesso. ID: ${profileId}`,
+                      });
+                    }}
+                    onError={(error) => {
+                      toast({
+                        title: "Erro ao criar perfil de risco",
+                        description: error,
+                        variant: "destructive",
+                      });
+                    }}
+                    addLog={addLog}
+                  />
+
+                  {createdProfileId && (
+                    <div className="mt-4 p-4 rounded-md bg-green-500/10 border border-green-500/20">
+                      <h4 className="text-sm font-medium text-green-500 mb-2">
+                        Perfil de Risco Criado!
+                      </h4>
+                      <p className="text-xs text-green-400">
+                        Perfil ID:{" "}
+                        <span className="font-mono">{createdProfileId}</span>
+                      </p>
+                      <p className="text-xs text-zinc-400 mt-2">
+                        Este ID será usado automaticamente ao criar contas.
+                      </p>
+                      <Button
+                        className="mt-4 w-full"
+                        variant="outline"
+                        onClick={() => setActiveTab("subscription")}
+                      >
+                        Próximo: Criar Assinatura →
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </TabsContent>
 
@@ -707,6 +765,7 @@ export default function NelogicaTestPage() {
               </TabsContent>
 
               {/* Tab Conta */}
+
               <TabsContent value="account" className="space-y-4">
                 <div className="space-y-2">
                   <h3 className="text-sm font-medium text-zinc-200">
@@ -727,6 +786,28 @@ export default function NelogicaTestPage() {
                     />
                     <p className="text-xs text-zinc-400 mt-1">
                       ID da licença criada na etapa anterior
+                    </p>
+                  </div>
+
+                  {/* Adicionar seletor de tipo de conta */}
+                  <div>
+                    <label className="text-xs text-zinc-400">
+                      Tipo de Conta
+                    </label>
+                    <Select
+                      value={accountType.toString()}
+                      onValueChange={(value) => setAccountType(parseInt(value))}
+                    >
+                      <SelectTrigger className="bg-zinc-800 border-zinc-700 text-zinc-100">
+                        <SelectValue placeholder="Selecione o tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">Conta de Desafio</SelectItem>
+                        <SelectItem value="1">Conta Real/Financiada</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Desafio: para avaliação | Real: para traders aprovados
                     </p>
                   </div>
 
@@ -1057,6 +1138,8 @@ export default function NelogicaTestPage() {
           </div>
         </CardContent>
       </Card>
+      {/* Monitor Nelogica - Nova adição */}
+      <NelogicaMonitor onRefresh={() => handleListSubscriptions()} />
     </div>
   );
 }

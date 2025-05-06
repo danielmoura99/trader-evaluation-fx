@@ -49,6 +49,7 @@ export async function testNelogicaAuth() {
 }
 
 interface CreateSubscriptionRequest {
+  planId: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -73,6 +74,7 @@ export async function testNelogicaCreateSubscription(
     );
 
     const params: CreateSubscriptionParams = {
+      planId: "c0dc847f-8fe6-4a31-ab14-62c2977ed4a0",
       firstName: request.firstName,
       lastName: request.lastName,
       email: request.email,
@@ -124,6 +126,8 @@ interface CreateAccountRequest {
   licenseId: string;
   name: string;
   plan: string;
+  accountType?: number;
+  profileId?: string;
 }
 
 /**
@@ -152,8 +156,10 @@ export async function testNelogicaCreateAccount(request: CreateAccountRequest) {
 
     const accounts = [
       {
-        name: request.name.substring(0, 20), // Limitando o nome a 20 caracteres
+        name: request.name.substring(0, 50), // Ajustando para o limite de 50 caracteres da documentação
         profileId: profileId,
+        accountType:
+          request.accountType !== undefined ? request.accountType : 0, // 0: Desafio (padrão)
       },
     ];
 
@@ -376,9 +382,13 @@ export async function testNelogicaListSubscriptions() {
       NELOGICA_PASSWORD
     );
 
+    // Constante com o planId específico que queremos filtrar
+    const TARGET_PLAN_ID = "c0dc847f-8fe6-4a31-ab14-62c2977ed4a0";
+
+    // Obtém todas as assinaturas
     const response = await apiClient.listSubscriptions({
       pageNumber: 1,
-      pageSize: 50,
+      pageSize: 100, // Aumentamos o tamanho da página para garantir que pegamos todas as assinaturas
     });
 
     if (!response.isSuccess) {
@@ -388,14 +398,22 @@ export async function testNelogicaListSubscriptions() {
       };
     }
 
+    // Filtra as assinaturas que têm o planId específico
+    const filteredSubscriptions = response.data.subscriptions.filter(
+      (subscription) => subscription.planId === TARGET_PLAN_ID
+    );
+
     console.log(
-      "Assinaturas e contas listadas com sucesso:",
-      response.data.subscriptions
+      "Assinaturas filtradas por planId:",
+      filteredSubscriptions.length,
+      "de",
+      response.data.subscriptions.length,
+      "total"
     );
 
     return {
       success: true,
-      subscriptions: response.data.subscriptions,
+      subscriptions: filteredSubscriptions,
     };
   } catch (error) {
     console.error("Erro ao listar assinaturas Nelogica:", error);
@@ -456,6 +474,59 @@ export async function testNelogicaConnectivity() {
     }
   } catch (error) {
     console.error("Erro inesperado ao testar conectividade Nelogica:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Erro desconhecido",
+    };
+  }
+}
+
+/**
+ * Cria um perfil de risco na Nelogica
+ */
+export async function testNelogicaCreateRiskProfile(params: {
+  initialBalance: number;
+  trailing: boolean;
+  stopOutRule: number;
+  leverage: number;
+  commissionsEnabled: boolean;
+  enableContractExposure: boolean;
+  contractExposure: number;
+  enableLoss: boolean;
+  lossRule: number;
+  enableGain: boolean;
+  gainRule: number;
+}) {
+  try {
+    console.log("Iniciando criação de perfil de risco na Nelogica...");
+
+    const apiClient = new NelogicaApiClient(
+      NELOGICA_API_URL,
+      NELOGICA_USERNAME,
+      NELOGICA_PASSWORD
+    );
+
+    // Por padrão, usamos o environmentId padrão da Nelogica
+    // Idealmente, isso viria de uma variável de ambiente ou configuração
+    const environmentId = process.env.NELOGICA_ENVIRONMENT_ID || "1";
+
+    const response = await apiClient.createRiskProfile(environmentId, params);
+
+    if (!response.isSuccess) {
+      return {
+        success: false,
+        error: response.message,
+      };
+    }
+
+    console.log("Perfil de risco criado com sucesso:", response.data.profileId);
+
+    return {
+      success: true,
+      profileId: response.data.profileId,
+    };
+  } catch (error) {
+    console.error("Erro ao criar perfil de risco Nelogica:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Erro desconhecido",
