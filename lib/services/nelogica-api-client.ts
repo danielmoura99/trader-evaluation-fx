@@ -751,7 +751,7 @@ export class NelogicaApiClient {
 
       return await this.executeApiCall(async () => {
         const response = await this.apiClient.post<NelogicaCreateRiskResponse>(
-          `api/v2/manager/risk/${environmentId}`,
+          `api/v2/manager/risk/`,
           params
         );
 

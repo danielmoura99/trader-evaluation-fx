@@ -397,6 +397,7 @@ export class NelogicaService {
           documentType: 1, // 1 = CPF
           document: client.cpf.replace(/\D/g, ""),
         },
+        planId: "c0dc847f-8fe6-4a31-ab14-62c2977ed4a0",
         birth: client.birthDate
           ? new Date(client.birthDate).toISOString().split("T")[0]
           : undefined,

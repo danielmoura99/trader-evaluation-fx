@@ -154,16 +154,40 @@ export async function testNelogicaCreateAccount(request: CreateAccountRequest) {
       };
     }
 
+    // Verifica se o nome está vazio e fornece um nome padrão se necessário
+    //const accountName =
+    //  !request.name || request.name.trim() === ""
+    //    ? `Trader ${request.plan} - ${new Date().toISOString().substring(0, 10)}`
+    //    : request.name.substring(0, 50);
+
     const accounts = [
       {
-        name: request.name.substring(0, 50), // Ajustando para o limite de 50 caracteres da documentação
-        profileId: profileId,
+        //name: accountName,
+        name: "Conta teste1",
+        // profileId: profileId,
+        profileId: "88ea95e9-0089-4064-8ca7-8b59301f7d51",
         accountType:
           request.accountType !== undefined ? request.accountType : 0, // 0: Desafio (padrão)
       },
     ];
 
+    console.log("-------- DADOS DA REQUISIÇÃO DE CRIAÇÃO DE CONTA --------");
+    console.log(`License ID: ${request.licenseId}`);
+    console.log("Dados da conta a ser criada:");
+    console.log(JSON.stringify(accounts, null, 2));
+    console.log("Mapeamento de perfis disponíveis:");
+    console.log(JSON.stringify(NELOGICA_PROFILES, null, 2));
+    console.log("Plano selecionado:", request.plan);
+    console.log("Profile ID associado:", profileId);
+    console.log("Tipo de conta:", request.accountType);
+    console.log("--------------------------------------------------------");
+
     const response = await apiClient.createAccount(request.licenseId, accounts);
+
+    // Log da resposta
+    console.log("-------- RESPOSTA DA CRIAÇÃO DE CONTA --------");
+    console.log(JSON.stringify(response.data, null, 2));
+    console.log("----------------------------------------------");
 
     if (!response.isSuccess) {
       return {

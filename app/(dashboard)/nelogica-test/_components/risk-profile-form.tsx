@@ -70,7 +70,7 @@ export function RiskProfileForm({
         addLog(
           `✅ Perfil de risco criado com sucesso! ID: ${result.profileId}`
         );
-        onSuccess(result.profileId);
+        onSuccess("");
       } else {
         addLog(`❌ Falha ao criar perfil de risco: ${result.error}`);
         onError(result.error || "Erro desconhecido");
