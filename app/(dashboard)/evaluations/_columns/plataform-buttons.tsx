@@ -1,19 +1,11 @@
-// _columns/platform-buttons.tsx
+// app/(dashboard)/evaluations/_columns/plataform-buttons.tsx
 "use client";
 
 import { Button } from "@/components/ui/button";
 import { Play } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import axios from "axios";
-import { getSubscriptionPlanId } from "@/utils/plataform-helper";
-import { BROKER_CONFIG } from "@/utils/broker-config";
-
-// Crie uma API route local para fazer a requisição
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const createBrokerAccount = async (payload: any) => {
-  const response = await axios.post("/api/broker/create-account", payload);
-  return response.data;
-};
+import { useState } from "react";
+import { startEvaluation } from "../_actions";
 
 interface Client {
   id?: string;
@@ -22,6 +14,7 @@ interface Client {
   cpf: string;
   birthDate: Date;
   platform: string;
+  plan: string;
 }
 
 interface PlatformButtonsProps {
@@ -34,53 +27,49 @@ export function PlatformButtons({
   onStartEvaluation,
 }: PlatformButtonsProps) {
   const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleCreateAccount = async () => {
+  const handleReleasePlatform = async () => {
+    if (!client.id) return;
+
+    setIsLoading(true);
+
     try {
-      const [firstName, ...lastNameParts] = client.name.split(" ");
-      const lastName = lastNameParts.join(" ");
+      // Chama a action do servidor diretamente
+      await startEvaluation(client.id);
 
-      const payload = {
-        request: "prop_trading_user_subscription",
-        email: client.email,
-        documentType: 1,
-        document: client.cpf.replace(/\D/g, ""),
-        firstName,
-        lastName,
-        dateOfBirth: client.birthDate.toISOString().split("T")[0],
-        subscriptionPlanId: getSubscriptionPlanId(client.platform),
-        testAccount: BROKER_CONFIG.testAccount,
-        authenticationCode: BROKER_CONFIG.authenticationCode,
-      };
+      toast({
+        title: "Sucesso",
+        description: "Plataforma liberada com sucesso",
+      });
 
-      const response = await createBrokerAccount(payload);
-
-      if (response.success) {
-        toast({
-          title: "Sucesso",
-          description: "Conta criada na corretora",
-        });
-        if (client.id) onStartEvaluation(client.id);
-      }
+      // Chama a função de callback que atualiza o status na interface
+      onStartEvaluation(client.id);
     } catch (error) {
-      console.error("Erro na integração:", error);
+      console.error("Erro na liberação de plataforma:", error);
       toast({
         title: "Erro",
-        description: "Falha ao criar conta na corretora",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Falha ao liberar a plataforma",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
     <Button
-      onClick={handleCreateAccount}
+      onClick={handleReleasePlatform}
       variant="outline"
       size="sm"
+      disabled={isLoading}
       className="bg-green-500/10 text-green-500 hover:bg-green-500/20 border-green-500/20"
     >
       <Play className="h-4 w-4 mr-2" />
-      Liberar Plataforma
+      {isLoading ? "Liberando..." : "Liberar Plataforma"}
     </Button>
   );
 }

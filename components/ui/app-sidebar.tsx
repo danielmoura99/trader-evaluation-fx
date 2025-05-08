@@ -1,7 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { Bot, Command, SquareTerminal } from "lucide-react";
+import {
+  Bot,
+  Command,
+  PieChart,
+  PlayCircle,
+  Shield,
+  SquareTerminal,
+  User,
+  UserX,
+} from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
@@ -31,18 +40,28 @@ const data = {
         {
           title: "Dashboard",
           url: "/dashboard",
+          icon: PieChart,
         },
         {
           title: "Avaliações",
           url: "/evaluations",
+          icon: PlayCircle,
         },
         {
           title: "Clientes",
           url: "/clients",
+          icon: User,
         },
         {
           title: "Contato Reprovados",
           url: "/reproved",
+          icon: UserX,
+        },
+        {
+          title: "Perfis de Risco",
+          url: "/risk-profiles",
+          icon: Shield, // Ou outro ícone apropriado
+          //isActive: pathname.startsWith("/risk-profiles"),
         },
       ],
     },

@@ -1,210 +1,227 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // lib/services/nelogica-service.ts
 import {
   NelogicaApiClient,
   CreateSubscriptionParams,
   CreateAccountParams,
-  RiskProfileParams,
+  //RiskProfileParams,
 } from "./nelogica-api-client";
 import { prisma } from "@/lib/prisma";
 import { TraderStatus } from "@/app/types";
+import { logger } from "@/lib/logger"; // Vamos criar este serviço de logger
 
 /**
  * Mapeamento de perfis de risco da Nelogica
- * Estes são os perfis mostrados na documentação
  */
 export const NELOGICA_PROFILES = {
-  "FX - 5K": "5631e4fb-aa99-404c-b45a-9dd7915de825", // LEVEL 1 - $25,000
-  "FX - 10K": "b4495f41-6f09-4c3b-b34c-0bc8d85f2f8f", // LEVEL 2 - $50,000
-  "FX - 25K": "581f1d7d-b5b5-4c0e-82cf-3f4fd9834bb3", // LEVEL 3 - $100,000
-  "FX - 50K": "e762b216-e00a-4004-9c71-64019ff01997", // LEVEL 4 - $150,000
-  // Mapeamento adicional se necessário
-  "FX - 100K": "ad7a0f90-210b-4f78-82aa-eebe58401d28", // LEVEL 5 - $250,000
-  "FX - 150K": "392705c5-8306-4e64-bd7a-4028b6ff40f1", // LEVEL 6 - $300,000
+  "FX - 5K": "af0cd162-d774-475e-866f-315ff1932223",
+  "FX - 10K": "b4495f41-6f09-4c3b-b34c-0bc8d85f2f8f",
+  "FX - 25K": "581f1d7d-b5b5-4c0e-82cf-3f4fd9834bb3",
+  "FX - 50K": "e762b216-e00a-4004-9c71-64019ff01997",
+  "FX - 100K": "ad7a0f90-210b-4f78-82aa-eebe58401d28",
+  "FX - 150K": "392705c5-8306-4e64-bd7a-4028b6ff40f1",
 };
 
-// Interfaces para os métodos do serviço
-export interface CreateSubscriptionResult {
-  customerId: string;
-  subscriptionId: string;
-  licenseId: string;
-  accounts: {
-    account: string;
-    profileId: string;
-  }[];
-}
-
 /**
- * Serviço de integração com a Nelogica
+ * Classe de serviço para integração com a API Nelogica
  */
 export class NelogicaService {
   private apiClient: NelogicaApiClient;
   private environmentId: string;
+  private retryAttempts: number = 3;
+  private retryDelay: number = 1000; // ms
 
-  constructor(
-    apiUrl: string,
-    username: string,
-    password: string,
-    environmentId: string
-  ) {
+  constructor() {
+    const apiUrl = process.env.NELOGICA_API_URL || "";
+    const username = process.env.NELOGICA_USERNAME || "";
+    const password = process.env.NELOGICA_PASSWORD || "";
+    const environmentId = process.env.NELOGICA_ENVIRONMENT_ID || "1";
+
+    if (!apiUrl || !username || !password) {
+      throw new Error(
+        "Configurações da API Nelogica não definidas nas variáveis de ambiente"
+      );
+    }
+
     this.apiClient = new NelogicaApiClient(apiUrl, username, password);
     this.environmentId = environmentId;
+
+    logger.info("Serviço Nelogica inicializado");
   }
 
   /**
-   * Registra um novo cliente e cria uma assinatura na Nelogica
+   * Executa uma função com retry em caso de falha
    */
-  public async createSubscription(
-    params: CreateSubscriptionParams
-  ): Promise<CreateSubscriptionResult> {
-    try {
-      console.log(
-        "[NelogicaService] Criando assinatura para cliente:",
-        params.email
-      );
+  private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
+    let lastError: Error | null = null;
 
-      // Chama a API da Nelogica para criar a assinatura
-      const response = await this.apiClient.createSubscription(params);
+    for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        lastError = error as Error;
+        logger.warn(
+          `Tentativa ${attempt}/${this.retryAttempts} falhou: ${lastError.message}`
+        );
+
+        // Se não for a última tentativa, aguarde antes de tentar novamente
+        if (attempt < this.retryAttempts) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, this.retryDelay * attempt)
+          );
+        }
+      }
+    }
+
+    throw lastError || new Error("Falha após múltiplas tentativas");
+  }
+
+  /**
+   * Cria uma assinatura na Nelogica para um cliente
+   */
+  public async createSubscription(client: {
+    id: string;
+    name: string;
+    email: string;
+    cpf: string;
+    phone?: string;
+    birthDate?: Date;
+    address?: string;
+    zipCode?: string;
+    plan: string;
+  }): Promise<{
+    customerId: string;
+    subscriptionId: string;
+    licenseId: string;
+  }> {
+    try {
+      logger.info(`Criando assinatura Nelogica para cliente ${client.id}`);
+
+      // Prepara os dados do cliente para a API
+      const [firstName, ...lastNameParts] = client.name.split(" ");
+      const lastName = lastNameParts.join(" ") || firstName;
+
+      const subscriptionParams: CreateSubscriptionParams = {
+        planId:
+          process.env.NELOGICA_PLAN_ID ||
+          "c0dc847f-8fe6-4a31-ab14-62c2977ed4a0", // Plano padrão da Nelogica
+        firstName,
+        lastName,
+        email: client.email,
+        document: {
+          documentType: 1, // 1 = CPF
+          document: client.cpf.replace(/\D/g, ""),
+        },
+        PhoneNumber: client.phone,
+        birth: client.birthDate
+          ? client.birthDate.toISOString().split("T")[0]
+          : undefined,
+        address:
+          client.address && client.zipCode
+            ? {
+                street: client.address,
+                zipCode: client.zipCode,
+                country: "BRA",
+                city: "São Paulo", // Valores padrão se não estiverem disponíveis
+                state: "SP",
+              }
+            : undefined,
+      };
+
+      // Executa com retry
+      const response = await this.withRetry(() =>
+        this.apiClient.createSubscription(subscriptionParams)
+      );
 
       if (!response.isSuccess) {
         throw new Error(`Falha ao criar assinatura: ${response.message}`);
       }
 
-      console.log(
-        "[NelogicaService] Assinatura criada com sucesso:",
-        response.data.subscriptionId
-      );
-
-      return {
+      const result = {
         customerId: response.data.customerId,
         subscriptionId: response.data.subscriptionId,
         licenseId: response.data.licenseId,
-        accounts: response.data.accounts,
       };
+
+      logger.info(`Assinatura criada com sucesso: ${JSON.stringify(result)}`);
+
+      // Atualiza o registro do cliente com os IDs da Nelogica
+      await prisma.client.update({
+        where: { id: client.id },
+        data: {
+          nelogicaCustomerId: result.customerId,
+          nelogicaSubscriptionId: result.subscriptionId,
+          nelogicaLicenseId: result.licenseId,
+        },
+      });
+
+      return result;
     } catch (error) {
-      console.error("[NelogicaService] Erro ao criar assinatura:", error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error(`Erro ao criar assinatura: ${errorMsg}`, {
+        clientId: client.id,
+      });
       throw error;
     }
   }
 
   /**
-   * Cria uma nova conta na Nelogica
+   * Cria uma conta para o cliente na Nelogica
    */
   public async createAccount(
     licenseId: string,
-    accounts: CreateAccountParams[]
-  ): Promise<{ account: string; profileId: string }[]> {
+    clientName: string,
+    plan: string,
+    accountType: number = 0
+  ): Promise<{
+    account: string;
+    profileId: string;
+  }> {
     try {
-      console.log(
-        `[NelogicaService] Criando ${accounts.length} conta(s) para licença:`,
-        licenseId
-      );
+      logger.info(`Criando conta Nelogica para licença ${licenseId}`);
 
-      // Chama a API da Nelogica para criar a conta
-      const response = await this.apiClient.createAccount(licenseId, accounts);
+      // Verifica se o nome está vazio e fornece um nome padrão se necessário
+      const accountName =
+        !clientName || clientName.trim() === ""
+          ? `Trader ${plan} - ${new Date().toISOString().substring(0, 10)}`
+          : clientName.substring(0, 49);
+
+      // Obtém o ID do perfil a partir do plano
+      const profileId =
+        NELOGICA_PROFILES[plan as keyof typeof NELOGICA_PROFILES];
+
+      if (!profileId) {
+        throw new Error(`Perfil de risco não encontrado para o plano: ${plan}`);
+      }
+
+      const accounts: CreateAccountParams[] = [
+        {
+          name: accountName,
+          profileId,
+          accountType,
+        },
+      ];
+
+      logger.debug(`Payload de criação de conta: ${JSON.stringify(accounts)}`);
+
+      // Executa com retry
+      const response = await this.withRetry(() =>
+        this.apiClient.createAccount(licenseId, accounts)
+      );
 
       if (!response.isSuccess) {
         throw new Error(`Falha ao criar conta: ${response.message}`);
       }
 
-      console.log(
-        "[NelogicaService] Contas criadas com sucesso:",
-        response.data
-      );
+      const result = {
+        account: response.data[0].account,
+        profileId: response.data[0].profileId,
+      };
 
-      return response.data;
+      logger.info(`Conta criada com sucesso: ${JSON.stringify(result)}`);
+      return result;
     } catch (error) {
-      console.error("[NelogicaService] Erro ao criar conta:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Cancela uma assinatura na Nelogica
-   */
-  public async cancelSubscription(subscriptionId: string): Promise<void> {
-    try {
-      console.log("[NelogicaService] Cancelando assinatura:", subscriptionId);
-
-      // Chama a API da Nelogica para cancelar a assinatura
-      const response = await this.apiClient.cancelSubscription(subscriptionId);
-
-      if (!response.isSuccess) {
-        throw new Error(`Falha ao cancelar assinatura: ${response.message}`);
-      }
-
-      console.log("[NelogicaService] Assinatura cancelada com sucesso");
-    } catch (error) {
-      console.error("[NelogicaService] Erro ao cancelar assinatura:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Remove uma conta na Nelogica
-   */
-  public async removeAccount(
-    licenseId: string,
-    account: string
-  ): Promise<void> {
-    try {
-      console.log("[NelogicaService] Removendo conta:", account);
-
-      // Chama a API da Nelogica para remover a conta
-      const response = await this.apiClient.removeAccount(licenseId, account);
-
-      if (!response.isSuccess) {
-        throw new Error(`Falha ao remover conta: ${response.message}`);
-      }
-
-      console.log("[NelogicaService] Conta removida com sucesso");
-    } catch (error) {
-      console.error("[NelogicaService] Erro ao remover conta:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Bloqueia uma conta na Nelogica
-   */
-  public async blockAccount(licenseId: string, account: string): Promise<void> {
-    try {
-      console.log("[NelogicaService] Bloqueando conta:", account);
-
-      // Chama a API da Nelogica para bloquear a conta
-      const response = await this.apiClient.blockAccount(licenseId, account);
-
-      if (!response.isSuccess) {
-        throw new Error(`Falha ao bloquear conta: ${response.message}`);
-      }
-
-      console.log("[NelogicaService] Conta bloqueada com sucesso");
-    } catch (error) {
-      console.error("[NelogicaService] Erro ao bloquear conta:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Desbloqueia uma conta na Nelogica
-   */
-  public async unblockAccount(
-    licenseId: string,
-    account: string
-  ): Promise<void> {
-    try {
-      console.log("[NelogicaService] Desbloqueando conta:", account);
-
-      // Chama a API da Nelogica para desbloquear a conta
-      const response = await this.apiClient.unblockAccount(licenseId, account);
-
-      if (!response.isSuccess) {
-        throw new Error(`Falha ao desbloquear conta: ${response.message}`);
-      }
-
-      console.log("[NelogicaService] Conta desbloqueada com sucesso");
-    } catch (error) {
-      console.error("[NelogicaService] Erro ao desbloquear conta:", error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error(`Erro ao criar conta: ${errorMsg}`, { licenseId });
       throw error;
     }
   }
@@ -215,21 +232,28 @@ export class NelogicaService {
   public async setAccountRisk(
     licenseId: string,
     account: string,
-    profileId: string,
+    plan: string,
     accountType: number = 0
   ): Promise<void> {
     try {
-      console.log(
-        "[NelogicaService] Configurando perfil de risco para conta:",
-        account
-      );
+      logger.info(`Configurando perfil de risco para conta ${account}`);
 
-      // Chama a API da Nelogica para definir o perfil de risco
-      const response = await this.apiClient.setAccountRisk(
-        licenseId,
-        account,
-        profileId,
-        accountType
+      // Obtém o ID do perfil a partir do plano
+      const profileId =
+        NELOGICA_PROFILES[plan as keyof typeof NELOGICA_PROFILES];
+
+      if (!profileId) {
+        throw new Error(`Perfil de risco não encontrado para o plano: ${plan}`);
+      }
+
+      // Executa com retry
+      const response = await this.withRetry(() =>
+        this.apiClient.setAccountRisk(
+          licenseId,
+          account,
+          profileId,
+          accountType
+        )
       );
 
       if (!response.isSuccess) {
@@ -238,353 +262,256 @@ export class NelogicaService {
         );
       }
 
-      console.log("[NelogicaService] Perfil de risco configurado com sucesso");
-    } catch (error) {
-      console.error(
-        "[NelogicaService] Erro ao definir perfil de risco:",
-        error
+      logger.info(
+        `Perfil de risco configurado com sucesso para conta ${account}`
       );
-      throw error;
-    }
-  }
-
-  /**
-   * Lista ambientes disponíveis
-   */
-  public async listEnvironments() {
-    try {
-      console.log("[NelogicaService] Listando ambientes disponíveis");
-
-      const response = await this.apiClient.listEnvironments();
-
-      if (!response.isSuccess) {
-        throw new Error(`Falha ao listar ambientes: ${response.message}`);
-      }
-
-      console.log("[NelogicaService] Ambientes listados com sucesso");
-      return response.data.environments;
     } catch (error) {
-      console.error("[NelogicaService] Erro ao listar ambientes:", error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error(`Erro ao configurar perfil de risco: ${errorMsg}`, {
+        licenseId,
+        account,
+      });
       throw error;
     }
   }
 
   /**
-   * Lista perfis de risco
+   * Bloqueia uma conta
    */
-  public async listRiskProfiles() {
+  public async blockAccount(licenseId: string, account: string): Promise<void> {
     try {
-      console.log("[NelogicaService] Listando perfis de risco");
+      logger.info(`Bloqueando conta ${account}`);
 
-      const response = await this.apiClient.listRiskProfiles(
-        this.environmentId
+      // Executa com retry
+      const response = await this.withRetry(() =>
+        this.apiClient.blockAccount(licenseId, account)
       );
 
       if (!response.isSuccess) {
-        throw new Error(`Falha ao listar perfis de risco: ${response.message}`);
+        throw new Error(`Falha ao bloquear conta: ${response.message}`);
       }
 
-      console.log("[NelogicaService] Perfis de risco listados com sucesso");
-      return response.data.riskProfiles;
+      logger.info(`Conta ${account} bloqueada com sucesso`);
     } catch (error) {
-      console.error("[NelogicaService] Erro ao listar perfis de risco:", error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error(`Erro ao bloquear conta: ${errorMsg}`, {
+        licenseId,
+        account,
+      });
       throw error;
     }
   }
 
   /**
-   * Cria um perfil de risco
+   * Desbloqueia uma conta
    */
-  public async createRiskProfile(params: RiskProfileParams) {
+  public async unblockAccount(
+    licenseId: string,
+    account: string
+  ): Promise<void> {
     try {
-      console.log("[NelogicaService] Criando perfil de risco");
+      logger.info(`Desbloqueando conta ${account}`);
 
-      const response = await this.apiClient.createRiskProfile(
-        this.environmentId,
-        params
+      // Executa com retry
+      const response = await this.withRetry(() =>
+        this.apiClient.unblockAccount(licenseId, account)
+      );
+
+      if (!response.isSuccess) {
+        throw new Error(`Falha ao desbloquear conta: ${response.message}`);
+      }
+
+      logger.info(`Conta ${account} desbloqueada com sucesso`);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error(`Erro ao desbloquear conta: ${errorMsg}`, {
+        licenseId,
+        account,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Remove uma conta
+   */
+  public async removeAccount(
+    licenseId: string,
+    account: string
+  ): Promise<void> {
+    try {
+      logger.info(`Removendo conta ${account}`);
+
+      // Executa com retry
+      const response = await this.withRetry(() =>
+        this.apiClient.removeAccount(licenseId, account)
+      );
+
+      if (!response.isSuccess) {
+        throw new Error(`Falha ao remover conta: ${response.message}`);
+      }
+
+      logger.info(`Conta ${account} removida com sucesso`);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error(`Erro ao remover conta: ${errorMsg}`, {
+        licenseId,
+        account,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Fluxo completo para liberar a plataforma para um cliente
+   * Cria assinatura, conta e configura perfil de risco
+   */
+  public async releaseTraderPlatform(client: {
+    id: string;
+    name: string;
+    email: string;
+    cpf: string;
+    phone?: string;
+    birthDate?: Date;
+    address?: string;
+    zipCode?: string;
+    plan: string;
+  }): Promise<{
+    customerId: string;
+    subscriptionId: string;
+    licenseId: string;
+    account: string;
+    profileId: string;
+  }> {
+    try {
+      logger.info(
+        `Iniciando fluxo de liberação de plataforma para cliente ${client.id}`
+      );
+
+      // 1. Criar assinatura
+      const subscription = await this.createSubscription(client);
+
+      // 2. Criar conta
+      const accountResult = await this.createAccount(
+        subscription.licenseId,
+        client.name,
+        client.plan,
+        0 // 0 = Conta de Desafio
+      );
+
+      // 3. Atualizar o registro do cliente com os dados da conta
+      await prisma.client.update({
+        where: { id: client.id },
+        data: {
+          nelogicaAccount: accountResult.account,
+          startDate: new Date(),
+          // Define a data de fim como 60 dias após a data atual
+          endDate: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
+          traderStatus: TraderStatus.IN_PROGRESS,
+        },
+      });
+
+      const result = {
+        ...subscription,
+        ...accountResult,
+      };
+
+      logger.info(`Plataforma liberada com sucesso para cliente ${client.id}`);
+      return result;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error(`Erro ao liberar plataforma: ${errorMsg}`, {
+        clientId: client.id,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Cria um perfil de risco na Nelogica
+   */
+  public async createRiskProfile(params: {
+    initialBalance: number;
+    trailing: boolean;
+    stopOutRule: number;
+    leverage: number;
+    commissionsEnabled: boolean;
+    enableContractExposure: boolean;
+    contractExposure: number;
+    enableLoss: boolean;
+    lossRule: number;
+    enableGain: boolean;
+    gainRule: number;
+  }): Promise<string> {
+    try {
+      logger.info("Criando perfil de risco na Nelogica");
+
+      // Executa com retry
+      const response = await this.withRetry(() =>
+        this.apiClient.createRiskProfile(this.environmentId, params)
       );
 
       if (!response.isSuccess) {
         throw new Error(`Falha ao criar perfil de risco: ${response.message}`);
       }
 
-      console.log(
-        "[NelogicaService] Perfil de risco criado com sucesso:",
-        response.data.profileId
+      const profileId = response.data.profileId;
+      logger.info(
+        `Perfil de risco criado com sucesso na Nelogica: ${profileId}`
       );
-      return response.data.profileId;
+
+      return profileId;
     } catch (error) {
-      console.error("[NelogicaService] Erro ao criar perfil de risco:", error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error(`Erro ao criar perfil de risco na Nelogica: ${errorMsg}`);
       throw error;
     }
   }
 
   /**
-   * Lista assinaturas
+   * Atualiza um perfil de risco na Nelogica
    */
-  public async listSubscriptions(params?: {
-    account?: string;
-    customerId?: string;
-    pageNumber?: number;
-    pageSize?: number;
-  }) {
-    try {
-      console.log("[NelogicaService] Listando assinaturas");
-
-      const response = await this.apiClient.listSubscriptions(params);
-
-      if (!response.isSuccess) {
-        throw new Error(`Falha ao listar assinaturas: ${response.message}`);
-      }
-
-      console.log("[NelogicaService] Assinaturas listadas com sucesso");
-      return response.data.subscriptions;
-    } catch (error) {
-      console.error("[NelogicaService] Erro ao listar assinaturas:", error);
-      throw error;
+  public async updateRiskProfile(
+    profileId: string,
+    params: {
+      initialBalance: number;
+      trailing: boolean;
+      stopOutRule: number;
+      leverage: number;
+      commissionsEnabled: boolean;
+      enableContractExposure: boolean;
+      contractExposure: number;
+      enableLoss: boolean;
+      lossRule: number;
+      enableGain: boolean;
+      gainRule: number;
     }
-  }
-
-  /**
-   * Atualiza um cliente
-   */
-  public async updateCustomer(
-    customerId: string,
-    firstName: string,
-    lastName: string
-  ) {
+  ): Promise<void> {
     try {
-      console.log("[NelogicaService] Atualizando cliente:", customerId);
+      logger.info(`Atualizando perfil de risco na Nelogica: ${profileId}`);
 
-      const response = await this.apiClient.updateCustomer(
-        customerId,
-        firstName,
-        lastName
-      );
-
-      if (!response.isSuccess) {
-        throw new Error(`Falha ao atualizar cliente: ${response.message}`);
-      }
-
-      console.log("[NelogicaService] Cliente atualizado com sucesso");
-      return response.data;
-    } catch (error) {
-      console.error("[NelogicaService] Erro ao atualizar cliente:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Cria uma assinatura e conta para um cliente registrado no sistema
-   */
-  public async registerClientEvaluation(client: any) {
-    try {
-      console.log(
-        "[NelogicaService] Iniciando registro de avaliação para cliente:",
-        client.name
-      );
-
-      // 1. Preparar dados para o registro na Nelogica
-      const [firstName, ...lastNameParts] = client.name.split(" ");
-      const lastName = lastNameParts.join(" ") || firstName; // Caso tenha apenas um nome
-
-      const subscriptionParams: CreateSubscriptionParams = {
-        firstName,
-        lastName,
-        email: client.email,
-        PhoneNumber: client.phone,
-        document: {
-          documentType: 1, // 1 = CPF
-          document: client.cpf.replace(/\D/g, ""),
-        },
-        planId: "c0dc847f-8fe6-4a31-ab14-62c2977ed4a0",
-        birth: client.birthDate
-          ? new Date(client.birthDate).toISOString().split("T")[0]
-          : undefined,
-        address: {
-          street: client.address,
-          zipCode: client.zipCode,
-          country: "BRA", // Assumindo Brasil como país padrão
-          city: "São Paulo", // Valores padrão se não estiverem disponíveis
-          state: "SP",
-          neighborhood: "Centro",
-        },
-        // Não criamos a conta aqui para ter mais controle
-      };
-
-      // 2. Criar assinatura na Nelogica
-      const subscriptionResult =
-        await this.createSubscription(subscriptionParams);
-
-      // 3. Criar conta para a licença gerada
-      const accountName = `${client.name.substring(0, 20)} - ${client.plan}`; // Limitando o tamanho do nome
-      const profileId =
-        NELOGICA_PROFILES[client.plan as keyof typeof NELOGICA_PROFILES];
-
-      if (!profileId) {
-        throw new Error(
-          `Perfil de risco não encontrado para o plano: ${client.plan}`
-        );
-      }
-
-      const accountParams: CreateAccountParams[] = [
-        {
-          name: accountName,
+      // Executa com retry
+      const response = await this.withRetry(() =>
+        this.apiClient.updateRiskProfile(this.environmentId, {
+          ...params,
           profileId,
-        },
-      ];
-
-      const accountResult = await this.createAccount(
-        subscriptionResult.licenseId,
-        accountParams
+        })
       );
 
-      // 4. Atualizar registro do cliente no banco de dados
-      await prisma.client.update({
-        where: { id: client.id },
-        data: {
-          nelogicaCustomerId: subscriptionResult.customerId,
-          nelogicaSubscriptionId: subscriptionResult.subscriptionId,
-          nelogicaLicenseId: subscriptionResult.licenseId,
-          nelogicaAccount: accountResult[0].account,
-          // Não mudar o status ainda, isso será feito em outro ponto do fluxo
-        },
-      });
-
-      console.log(
-        "[NelogicaService] Cliente registrado com sucesso na Nelogica:",
-        {
-          customerId: subscriptionResult.customerId,
-          subscriptionId: subscriptionResult.subscriptionId,
-          licenseId: subscriptionResult.licenseId,
-          account: accountResult[0].account,
-        }
-      );
-
-      return {
-        customerId: subscriptionResult.customerId,
-        subscriptionId: subscriptionResult.subscriptionId,
-        licenseId: subscriptionResult.licenseId,
-        account: accountResult[0].account,
-      };
-    } catch (error) {
-      console.error(
-        "[NelogicaService] Erro ao registrar cliente na Nelogica:",
-        error
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Inicia a avaliação de um cliente, definindo os perfis de risco
-   */
-  public async startEvaluation(client: any) {
-    try {
-      console.log(
-        "[NelogicaService] Iniciando avaliação para cliente:",
-        client.id
-      );
-
-      // Verificar se o cliente tem os dados da Nelogica
-      if (!client.nelogicaLicenseId || !client.nelogicaAccount) {
-        throw new Error("Cliente não possui configuração na Nelogica");
-      }
-
-      // Definir o perfil de risco para a conta
-      const profileId =
-        NELOGICA_PROFILES[client.plan as keyof typeof NELOGICA_PROFILES];
-
-      if (!profileId) {
+      if (!response.isSuccess) {
         throw new Error(
-          `Perfil de risco não encontrado para o plano: ${client.plan}`
+          `Falha ao atualizar perfil de risco: ${response.message}`
         );
       }
 
-      // Define o tipo de conta como Desafio (0)
-      await this.setAccountRisk(
-        client.nelogicaLicenseId,
-        client.nelogicaAccount,
-        profileId,
-        0
+      logger.info(
+        `Perfil de risco atualizado com sucesso na Nelogica: ${profileId}`
       );
-
-      // Atualizar status do cliente no banco de dados
-      await prisma.client.update({
-        where: { id: client.id },
-        data: {
-          traderStatus: TraderStatus.IN_PROGRESS,
-          startDate: new Date(),
-          // Calculando a data de fim (60 dias após o início)
-          endDate: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
-        },
-      });
-
-      console.log(
-        "[NelogicaService] Avaliação iniciada com sucesso para o cliente:",
-        client.id
-      );
-
-      return {
-        success: true,
-        message: "Avaliação iniciada com sucesso",
-      };
     } catch (error) {
-      console.error("[NelogicaService] Erro ao iniciar avaliação:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Finaliza a avaliação de um cliente
-   */
-  public async finishEvaluation(client: any, status: "Aprovado" | "Reprovado") {
-    try {
-      console.log(
-        `[NelogicaService] Finalizando avaliação para cliente ${client.id} com status: ${status}`
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error(
+        `Erro ao atualizar perfil de risco na Nelogica: ${errorMsg}`
       );
-
-      // Verificar se o cliente tem os dados da Nelogica
-      if (
-        !client.nelogicaLicenseId ||
-        !client.nelogicaSubscriptionId ||
-        !client.nelogicaAccount
-      ) {
-        throw new Error("Cliente não possui configuração na Nelogica");
-      }
-
-      // 1. Remover a conta de avaliação
-      await this.removeAccount(
-        client.nelogicaLicenseId,
-        client.nelogicaAccount
-      );
-
-      // 2. Se aprovado, poderia criar uma nova conta (conta real ou de simulação remunerada)
-      // Isso seria implementado em outro método
-
-      // 3. Atualizar status do cliente no banco de dados
-      await prisma.client.update({
-        where: { id: client.id },
-        data: {
-          traderStatus:
-            status === "Aprovado"
-              ? TraderStatus.APPROVED
-              : TraderStatus.REJECTED,
-          endDate: new Date(),
-          cancellationDate: new Date(),
-        },
-      });
-
-      console.log(
-        `[NelogicaService] Avaliação finalizada com sucesso para o cliente ${client.id}: ${status}`
-      );
-
-      return {
-        success: true,
-        message: `Avaliação finalizada como ${status.toLowerCase()}`,
-      };
-    } catch (error) {
-      console.error("[NelogicaService] Erro ao finalizar avaliação:", error);
       throw error;
     }
   }

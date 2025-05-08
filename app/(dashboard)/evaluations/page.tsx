@@ -67,16 +67,24 @@ export default function EvaluationsPage() {
 
   const handleStartEvaluation = async (clientId: string) => {
     try {
+      // Usa a action do servidor diretamente
       await startEvaluation(clientId);
+
+      // Recarrega os dados para atualizar a UI
       await fetchClients();
+
       toast({
         title: "Avaliação iniciada",
         description: "A plataforma foi liberada e a avaliação iniciada.",
       });
     } catch (error) {
+      console.error("Erro ao iniciar avaliação:", error);
       toast({
         title: "Erro ao iniciar avaliação",
-        description: "Ocorreu um erro ao tentar iniciar a avaliação.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Ocorreu um erro ao tentar iniciar a avaliação.",
         variant: "destructive",
       });
     }

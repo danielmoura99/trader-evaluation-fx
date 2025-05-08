@@ -242,11 +242,16 @@ export default function NelogicaTestPage() {
     setLoading(true);
     try {
       addLog(`Criando conta para licença: ${responseData.licenseId}`);
+
+      // Use o profileId criado, se disponível
+      const profileIdToUse = createdProfileId || undefined;
+
       const result = await testNelogicaCreateAccount({
         licenseId: responseData.licenseId,
         name: `${formData.firstName} ${formData.lastName}`,
         plan: formData.plan,
         accountType: accountType,
+        profileId: profileIdToUse, // Adicionado esta linha
       });
 
       if (result.success) {

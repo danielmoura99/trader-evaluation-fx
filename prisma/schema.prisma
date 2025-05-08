@@ -25,6 +25,13 @@ model Client {
   cancellationDate  DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+
+  // Campos para integração com Nelogica
+  nelogicaCustomerId     String?
+  nelogicaSubscriptionId String?
+  nelogicaLicenseId      String?
+  nelogicaAccount        String?
+
   contacts          Contact[] // Nova relação
 
   @@map("clients")
@@ -71,4 +78,37 @@ model Payment {
   updatedAt       DateTime  @updatedAt
 
   @@map("payments")
+}
+
+model RiskProfile {
+  id                String          @id @default(cuid())
+  name              String
+  nelogicaProfileId String          @unique
+  initialBalance    Float
+  trailing          Boolean
+  stopOutRule       Float
+  leverage          Int
+  commissionsEnabled Boolean
+  enableContractExposure Boolean
+  contractExposure  Int
+  enableLoss        Boolean
+  lossRule          Float
+  enableGain        Boolean
+  gainRule          Float
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  planMappings      PlanRiskMapping[]
+
+  @@map("risk_profiles")
+}
+
+model PlanRiskMapping {
+  id            String      @id @default(cuid())
+  planName      String
+  riskProfileId String
+  riskProfile   RiskProfile @relation(fields: [riskProfileId], references: [id])
+  createdAt     DateTime    @default(now())
+
+  @@unique([planName, riskProfileId])
+  @@map("plan_risk_mappings")
 }
