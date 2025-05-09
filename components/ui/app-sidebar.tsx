@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   Bot,
   Command,
+  FileCheck,
   PieChart,
   PlayCircle,
   Shield,
@@ -56,6 +57,11 @@ const data = {
           title: "Contato Reprovados",
           url: "/reproved",
           icon: UserX,
+        },
+        {
+          title: "Assinaturas", // Novo item adicionado
+          url: "/subscriptions",
+          icon: FileCheck, // ou outro ícone adequado
         },
         {
           title: "Perfis de Risco",

@@ -814,14 +814,20 @@ export class NelogicaApiClient {
   /**
    * Lista assinaturas
    */
-  public async listSubscriptions(
-    params?: { account?: string; customerId?: string } & PaginationParams
-  ): Promise<NelogicaSubscriptionsResponse> {
+  public async listSubscriptions(params?: {
+    // Removemos subscriptionId já que não é suportado diretamente pela API
+    customerId?: string;
+    account?: string;
+    pageNumber?: number;
+    pageSize?: number;
+  }): Promise<NelogicaSubscriptionsResponse> {
     try {
       const queryParams = new URLSearchParams();
-      if (params?.account) queryParams.append("account", params.account);
+
+      // Apenas adicionar parâmetros suportados
       if (params?.customerId)
         queryParams.append("customerId", params.customerId);
+      if (params?.account) queryParams.append("account", params.account);
       if (params?.pageNumber)
         queryParams.append("pageNumber", params.pageNumber.toString());
       if (params?.pageSize)
@@ -829,28 +835,15 @@ export class NelogicaApiClient {
 
       const url = `api/v2/manager/subscriptions${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
 
-      console.log("[Nelogica API] Listando assinaturas");
-
       return await this.executeApiCall(async () => {
         const response =
           await this.apiClient.get<NelogicaSubscriptionsResponse>(url);
-
-        if (response.data.isSuccess) {
-          console.log(
-            "[Nelogica API] Assinaturas obtidas com sucesso:",
-            response.data.data.subscriptions.length
-          );
-        }
-
         return response.data;
       });
-    } catch (error: any) {
-      console.error(
-        "[Nelogica API] Erro ao listar assinaturas:",
-        error.response?.data || error.message
-      );
+    } catch (error) {
+      console.error("[Nelogica API] Erro ao listar assinaturas:", error);
       throw new Error(
-        `Falha ao listar assinaturas: ${error.response?.data?.message || error.message}`
+        `Falha ao listar assinaturas: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }

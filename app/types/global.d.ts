@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Client } from "@/app/types";
 
 declare global {
@@ -7,7 +8,7 @@ declare global {
     startEvaluation: (id: string) => void;
     openFinishEvaluation: (client: Client) => void;
     contactClient: (client: Client) => void;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     editRiskProfile: (profile: any) => void;
+    viewSubscriptionDetails: (subscription: any) => void;
   }
 }

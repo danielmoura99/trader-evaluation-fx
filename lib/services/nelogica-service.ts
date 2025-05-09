@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // lib/services/nelogica-service.ts
 import {
   NelogicaApiClient,
@@ -512,6 +513,143 @@ export class NelogicaService {
       logger.error(
         `Erro ao atualizar perfil de risco na Nelogica: ${errorMsg}`
       );
+      throw error;
+    }
+  }
+
+  /**
+   * Lista assinaturas da Nelogica
+   */
+  public async listSubscriptions(): Promise<any[]> {
+    try {
+      logger.info("Listando assinaturas na Nelogica");
+
+      // Constante com o planId específico que queremos filtrar
+      const TARGET_PLAN_ID = "c0dc847f-8fe6-4a31-ab14-62c2977ed4a0";
+
+      // Executa com retry
+      const response = await this.withRetry(() =>
+        this.apiClient.listSubscriptions({
+          pageNumber: 1,
+          pageSize: 100, // Recebe até 100 assinaturas por página
+        })
+      );
+
+      if (!response.isSuccess) {
+        throw new Error(`Falha ao listar assinaturas: ${response.message}`);
+      }
+
+      // Filtra as assinaturas que têm o planId específico
+      const filteredSubscriptions = response.data.subscriptions.filter(
+        (subscription) => subscription.planId === TARGET_PLAN_ID
+      );
+
+      logger.info(
+        `${filteredSubscriptions.length} assinaturas encontradas com o planId ${TARGET_PLAN_ID} (de um total de ${response.data.subscriptions.length})`
+      );
+
+      return filteredSubscriptions;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error(`Erro ao listar assinaturas: ${errorMsg}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Cancela uma assinatura na Nelogica
+   */
+  public async cancelSubscription(subscriptionId: string): Promise<void> {
+    try {
+      logger.info(`Cancelando assinatura ${subscriptionId}`);
+
+      // Executa com retry
+      const response = await this.withRetry(() =>
+        this.apiClient.cancelSubscription(subscriptionId)
+      );
+
+      if (!response.isSuccess) {
+        throw new Error(`Falha ao cancelar assinatura: ${response.message}`);
+      }
+
+      logger.info(`Assinatura ${subscriptionId} cancelada com sucesso`);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error(`Erro ao cancelar assinatura: ${errorMsg}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtém detalhes completos de uma assinatura
+   */
+  public async getSubscriptionDetails(subscriptionId: string): Promise<any> {
+    try {
+      logger.info(`Obtendo detalhes da assinatura ${subscriptionId}`);
+
+      // Constante com o planId específico que queremos filtrar
+      const TARGET_PLAN_ID = "c0dc847f-8fe6-4a31-ab14-62c2977ed4a0";
+
+      // Buscamos todos os subscriptions e filtramos manualmente pelo ID
+      const response = await this.withRetry(() =>
+        this.apiClient.listSubscriptions({
+          pageNumber: 1,
+          pageSize: 100,
+        })
+      );
+
+      if (!response.isSuccess) {
+        throw new Error(
+          `Falha ao obter detalhes da assinatura: ${response.message}`
+        );
+      }
+
+      // Filtramos manualmente pela subscriptionId e planId
+      const subscription = response.data.subscriptions.find(
+        (sub: any) =>
+          sub.subscriptionId === subscriptionId && sub.planId === TARGET_PLAN_ID
+      );
+
+      if (!subscription) {
+        throw new Error(
+          `Assinatura ${subscriptionId} não encontrada ou não pertence ao plano correto`
+        );
+      }
+
+      logger.info(
+        `Detalhes da assinatura ${subscriptionId} obtidos com sucesso`
+      );
+
+      // Buscar se o cliente tem data de cancelamento em nosso banco
+      const client = await prisma.client.findFirst({
+        where: { nelogicaSubscriptionId: subscriptionId },
+      });
+
+      // Simular histórico, pois a API não fornece essa informação
+      const history = [
+        {
+          action: "Criação",
+          timestamp: subscription.createdAt,
+          details: "Assinatura criada",
+        },
+      ];
+
+      // Se o cliente tiver data de cancelamento, adicionamos ao histórico
+      if (client?.cancellationDate) {
+        history.push({
+          action: "Cancelamento",
+          timestamp: client.cancellationDate.toISOString(),
+          details: "Assinatura cancelada",
+        });
+      }
+
+      return {
+        ...subscription,
+        history,
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error(`Erro ao obter detalhes da assinatura: ${errorMsg}`);
       throw error;
     }
   }
