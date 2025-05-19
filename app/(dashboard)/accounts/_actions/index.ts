@@ -55,7 +55,7 @@ export async function getAccounts() {
       });
 
       // Adiciona cada conta ao array de contas
-      for (const account of subscription.accounts) {
+      for (const account of subscription.accounts || []) {
         accounts.push({
           account: account.account,
           name: account.name,
@@ -190,7 +190,8 @@ export async function getAccountDetails(licenseId: string, account: string) {
     const subscription = subscriptions.find(
       (sub) =>
         sub.licenseId === licenseId &&
-        sub.accounts?.some((acc) => acc.account === account)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        sub.accounts?.some((acc: any) => acc.account === account)
     );
 
     if (!subscription) {
@@ -199,7 +200,8 @@ export async function getAccountDetails(licenseId: string, account: string) {
 
     // Encontrar a conta específica
     const accountData = subscription.accounts?.find(
-      (acc) => acc.account === account
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (acc: any) => acc.account === account
     );
 
     if (!accountData) {

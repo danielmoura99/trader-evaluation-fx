@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 // app/(dashboard)/accounts/_components/accounts-client.tsx
 "use client";
 
@@ -43,6 +42,7 @@ export function AccountsClient({ initialAccounts }: AccountsClientProps) {
         title: "Contas atualizadas",
         description: "Lista de contas atualizada com sucesso",
       });
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       toast({
         title: "Erro ao atualizar contas",

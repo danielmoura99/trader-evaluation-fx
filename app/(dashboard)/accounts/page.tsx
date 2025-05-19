@@ -1,8 +1,6 @@
 // app/(dashboard)/accounts/page.tsx
 import { getAccounts } from "./_actions";
 import { AccountsClient } from "./_components/accounts-client";
-import { DashboardHeader } from "@/components/dashboard-header";
-import { Shell } from "@/components/shell";
 
 export const metadata = {
   title: "Contas Nelogica",
@@ -13,13 +11,13 @@ export default async function AccountsPage() {
   const accounts = await getAccounts();
 
   return (
-    <Shell>
-      <DashboardHeader
-        title="Contas Nelogica"
-        description="Visualize e gerencie as contas na plataforma Nelogica"
-      />
-
-      <AccountsClient initialAccounts={accounts} />
-    </Shell>
+    <div className="flex-1 space-y-4 p-8 pt-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-3xl font-bold tracking-tight">Contas Nelogica</h2>
+      </div>
+      <div className="grid gap-4">
+        <AccountsClient initialAccounts={accounts} />
+      </div>
+    </div>
   );
 }

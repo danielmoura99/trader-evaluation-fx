@@ -1,3 +1,5 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // app/(dashboard)/accounts/_components/account-details-dialog.tsx
 "use client";
@@ -52,7 +54,6 @@ export function AccountDetailsDialog({
     try {
       const data = await getAccountDetails(account.licenseId, account.account);
       setDetails(data);
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       toast({
         title: "Erro ao carregar detalhes",

@@ -5,6 +5,7 @@ import * as React from "react";
 import {
   Bot,
   Command,
+  Database,
   FileCheck,
   PieChart,
   PlayCircle,
@@ -58,6 +59,11 @@ const data = {
           title: "Contato Reprovados",
           url: "/reproved",
           icon: UserX,
+        },
+        {
+          title: "Contas",
+          url: "/accounts",
+          icon: Database, // ou outro ícone apropriado
         },
         {
           title: "Assinaturas", // Novo item adicionado
