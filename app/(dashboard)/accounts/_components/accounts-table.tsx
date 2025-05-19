@@ -12,13 +12,19 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { NelogicaAccount } from "../_actions";
+import { AccountActionButtons } from "./account-action-buttons";
 
 interface AccountsTableProps {
   accounts: NelogicaAccount[];
   isLoading: boolean;
+  onRefresh: () => void; // Nova prop para forçar atualização
 }
 
-export function AccountsTable({ accounts, isLoading }: AccountsTableProps) {
+export function AccountsTable({
+  accounts,
+  isLoading,
+  onRefresh,
+}: AccountsTableProps) {
   const [filter, setFilter] = useState("");
 
   // Filtrar contas
@@ -143,8 +149,10 @@ export function AccountsTable({ accounts, isLoading }: AccountsTableProps) {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      {/* Botões de ação serão implementados separadamente */}
-                      <AccountActionButtons account={account} />
+                      <AccountActionButtons
+                        account={account}
+                        onAccountUpdated={onRefresh} // Passa a função de atualização
+                      />
                     </div>
                   </TableCell>
                 </TableRow>
@@ -153,20 +161,6 @@ export function AccountsTable({ accounts, isLoading }: AccountsTableProps) {
           </TableBody>
         </Table>
       </div>
-    </div>
-  );
-}
-
-// Componente de botões de ação simplificado para este exemplo
-function AccountActionButtons({ account }: { account: NelogicaAccount }) {
-  return (
-    <div className="flex items-center space-x-2">
-      <button
-        onClick={() => window.viewAccountDetails?.(account)}
-        className="p-1 text-zinc-400 hover:text-zinc-100"
-      >
-        Ver
-      </button>
     </div>
   );
 }

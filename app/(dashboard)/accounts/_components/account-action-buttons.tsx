@@ -14,10 +14,15 @@ import {
 
 interface AccountActionButtonsProps {
   account: NelogicaAccount;
+  onAccountUpdated?: () => void; // Nova prop para forçar atualização da lista
 }
 
-export function AccountActionButtons({ account }: AccountActionButtonsProps) {
+export function AccountActionButtons({
+  account,
+  onAccountUpdated,
+}: AccountActionButtonsProps) {
   const [isLoading, setIsLoading] = useState<string | null>(null);
+  const [isBlocked, setIsBlocked] = useState(account.isBlocked || false);
   const { toast } = useToast();
 
   const handleBlockAccount = async () => {
@@ -30,10 +35,12 @@ export function AccountActionButtons({ account }: AccountActionButtonsProps) {
     setIsLoading("block");
     try {
       await blockAccount(account.licenseId, account.account);
+      setIsBlocked(true); // Atualiza o estado local
       toast({
         title: "Conta bloqueada",
         description: "A conta foi bloqueada com sucesso.",
       });
+      if (onAccountUpdated) onAccountUpdated(); // Força atualização da lista completa
     } catch (error) {
       toast({
         title: "Erro ao bloquear conta",
@@ -56,10 +63,12 @@ export function AccountActionButtons({ account }: AccountActionButtonsProps) {
     setIsLoading("unblock");
     try {
       await unblockAccount(account.licenseId, account.account);
+      setIsBlocked(false); // Atualiza o estado local
       toast({
         title: "Conta desbloqueada",
         description: "A conta foi desbloqueada com sucesso.",
       });
+      if (onAccountUpdated) onAccountUpdated(); // Força atualização da lista completa
     } catch (error) {
       toast({
         title: "Erro ao desbloquear conta",
@@ -88,6 +97,7 @@ export function AccountActionButtons({ account }: AccountActionButtonsProps) {
         title: "Conta removida",
         description: "A conta foi removida com sucesso.",
       });
+      if (onAccountUpdated) onAccountUpdated(); // Força atualização da lista completa
     } catch (error) {
       toast({
         title: "Erro ao remover conta",
@@ -112,7 +122,7 @@ export function AccountActionButtons({ account }: AccountActionButtonsProps) {
         <span className="sr-only">Ver detalhes</span>
       </Button>
 
-      {account.isBlocked ? (
+      {isBlocked ? (
         <Button
           variant="ghost"
           size="icon"

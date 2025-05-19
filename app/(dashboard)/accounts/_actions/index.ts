@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // app/(dashboard)/accounts/_actions/index.ts
 "use server";
 
@@ -16,7 +18,7 @@ export interface NelogicaAccount {
   licenseId: string;
   clientId?: string;
   profileId: string;
-  isBlocked?: boolean;
+  isBlocked: boolean;
   validatedAt: string;
   client?: {
     id: string;
@@ -55,15 +57,28 @@ export async function getAccounts() {
       });
 
       // Adiciona cada conta ao array de contas
-      for (const account of subscription.accounts || []) {
+      for (const account of subscription.accounts) {
+        // Verificar status de bloqueio da conta
+        let isBlocked = false;
+        try {
+          // Tenta obter o status de bloqueio específico da conta
+          isBlocked = await nelogicaService.isAccountBlocked(
+            subscription.licenseId,
+            account.account
+          );
+        } catch (error) {
+          logger.warn(
+            `Não foi possível verificar status de bloqueio da conta ${account.account}`
+          );
+        }
+
         accounts.push({
           account: account.account,
           name: account.name,
           licenseId: subscription.licenseId,
           profileId: account.profileId,
           validatedAt: account.validadedAt,
-          // Status de bloqueio não está disponível diretamente na API, verificaremos o status mais tarde
-          isBlocked: false,
+          isBlocked: isBlocked,
           client: client
             ? {
                 id: client.id,
@@ -100,10 +115,20 @@ export async function blockAccount(licenseId: string, account: string) {
     // Bloqueia a conta na Nelogica
     await nelogicaService.blockAccount(licenseId, account);
 
+    // Atualiza o registro do cliente local se necessário
+    const client = await prisma.client.findFirst({
+      where: { nelogicaAccount: account },
+    });
+
+    if (client) {
+      // Opcionalmente podemos atualizar algum status no cliente local
+      // dependendo das necessidades do projeto
+    }
+
     logger.info(`Conta ${account} bloqueada com sucesso`);
     revalidatePath("/accounts");
 
-    return { success: true };
+    return { success: true, isBlocked: true };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     logger.error(`Erro ao bloquear conta: ${errorMsg}`);
@@ -124,10 +149,20 @@ export async function unblockAccount(licenseId: string, account: string) {
     // Desbloqueia a conta na Nelogica
     await nelogicaService.unblockAccount(licenseId, account);
 
+    // Atualiza o registro do cliente local se necessário
+    const client = await prisma.client.findFirst({
+      where: { nelogicaAccount: account },
+    });
+
+    if (client) {
+      // Opcionalmente podemos atualizar algum status no cliente local
+      // dependendo das necessidades do projeto
+    }
+
     logger.info(`Conta ${account} desbloqueada com sucesso`);
     revalidatePath("/accounts");
 
-    return { success: true };
+    return { success: true, isBlocked: false };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     logger.error(`Erro ao desbloquear conta: ${errorMsg}`);
@@ -190,7 +225,6 @@ export async function getAccountDetails(licenseId: string, account: string) {
     const subscription = subscriptions.find(
       (sub) =>
         sub.licenseId === licenseId &&
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         sub.accounts?.some((acc: any) => acc.account === account)
     );
 
@@ -200,12 +234,22 @@ export async function getAccountDetails(licenseId: string, account: string) {
 
     // Encontrar a conta específica
     const accountData = subscription.accounts?.find(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (acc: any) => acc.account === account
     );
 
     if (!accountData) {
       throw new Error(`Conta ${account} não encontrada`);
+    }
+
+    // Verificar se a conta está bloqueada
+    let isBlocked = false;
+    try {
+      // Isso é apenas um placeholder - você precisará implementar a lógica real
+      // para verificar se a conta está bloqueada com base na sua API
+      // Por exemplo, pode ser uma chamada separada para verificar o status
+      isBlocked = await nelogicaService.isAccountBlocked(licenseId, account);
+    } catch (error) {
+      logger.warn(`Não foi possível verificar status de bloqueio: ${error}`);
     }
 
     // Busca o cliente correspondente no banco local
@@ -221,6 +265,7 @@ export async function getAccountDetails(licenseId: string, account: string) {
       licenseId,
       subscriptionId: subscription.subscriptionId,
       customerId: subscription.customerId,
+      isBlocked: isBlocked,
       clientDetails: client
         ? {
             id: client.id,

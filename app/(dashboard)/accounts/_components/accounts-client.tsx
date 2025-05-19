@@ -76,7 +76,11 @@ export function AccountsClient({ initialAccounts }: AccountsClientProps) {
         </Button>
       </div>
 
-      <AccountsTable accounts={accounts} isLoading={isLoading} />
+      <AccountsTable
+        accounts={accounts}
+        isLoading={isLoading}
+        onRefresh={handleRefresh} // Passa a função de atualização
+      />
 
       <AccountDetailsDialog
         open={isDialogOpen}

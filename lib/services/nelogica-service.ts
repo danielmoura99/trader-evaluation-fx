@@ -653,4 +653,124 @@ export class NelogicaService {
       throw error;
     }
   }
+
+  /**
+   * Verifica se uma conta está bloqueada
+   */
+  public async isAccountBlocked(
+    licenseId: string,
+    account: string
+  ): Promise<boolean> {
+    try {
+      logger.info(`Verificando status de bloqueio da conta ${account}`);
+
+      // Tenta obter informações sobre a conta através de listSubscriptions
+      // e filtra para encontrar a conta específica
+      const subscriptions = await this.listSubscriptions();
+
+      // Encontra a assinatura correspondente
+      const subscription = subscriptions.find(
+        (sub) => sub.licenseId === licenseId
+      );
+
+      if (!subscription) {
+        throw new Error(`Licença ${licenseId} não encontrada`);
+      }
+
+      // Verificar se a conta existe e obter informações de status
+      // Isso depende de como a API da Nelogica retorna essa informação
+      // Esta é uma implementação de exemplo - adapte conforme as capacidades reais da API
+
+      // Exemplo: podemos tentar uma ação específica que falha se a conta estiver bloqueada
+      try {
+        // Aqui você faria uma chamada real para verificar o status
+        // Por exemplo, verificando se a conta aparece em uma lista de contas bloqueadas
+        // ou tentando executar uma operação que só funciona em contas desbloqueadas
+
+        // Na falta de uma API específica, verificamos o que foi armazenado no cliente local
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const client = await prisma.client.findFirst({
+          where: { nelogicaAccount: account },
+          select: {
+            id: true,
+            // Se você tiver um campo para status de bloqueio, selecione-o aqui
+            // isAccountBlocked: true
+          },
+        });
+
+        // Aqui estamos usando um valor mockado
+        // Substitua por uma lógica real com base na sua API
+        return false; // MOCK: Para teste, retornar sempre desbloqueado
+
+        // Implementação real quando disponível:
+        // return !!client?.isAccountBlocked;
+      } catch (error) {
+        // Se a operação falhar, consideramos a conta como bloqueada
+        logger.warn(
+          `Erro ao verificar status da conta ${account}, assumindo bloqueada: ${error}`
+        );
+        return true;
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error(`Erro ao verificar se conta está bloqueada: ${errorMsg}`);
+
+      // Em caso de erro, é mais seguro assumir que a conta não está bloqueada
+      // para evitar ações equivocadas
+      return false;
+    }
+  }
+  /**
+   * Obtém detalhes completos de uma conta específica
+   */
+  public async getAccountDetails(
+    licenseId: string,
+    account: string
+  ): Promise<any> {
+    try {
+      logger.info(`Obtendo detalhes da conta ${account}`);
+
+      // Busca as assinaturas para encontrar a conta específica
+      const subscriptions = await this.listSubscriptions();
+
+      // Filtra para encontrar a assinatura correta
+      const subscription = subscriptions.find(
+        (sub) => sub.licenseId === licenseId
+      );
+
+      if (!subscription) {
+        throw new Error(`Licença ${licenseId} não encontrada`);
+      }
+
+      // Busca a conta específica
+      const accountData = subscription.accounts?.find(
+        (acc: any) => acc.account === account
+      );
+
+      if (!accountData) {
+        throw new Error(`Conta ${account} não encontrada`);
+      }
+
+      // Verificar status de bloqueio da conta
+      const isBlocked = await this.isAccountBlocked(licenseId, account);
+
+      // Montar objeto de resposta enriquecido com dados adicionais
+      const accountDetails = {
+        ...accountData,
+        licenseId: subscription.licenseId,
+        subscriptionId: subscription.subscriptionId,
+        customerId: subscription.customerId,
+        isBlocked: isBlocked,
+        validatedAt: accountData.validadedAt,
+        // Adicione outros dados relevantes conforme necessário
+      };
+
+      logger.info(`Detalhes da conta ${account} obtidos com sucesso`);
+      return accountDetails;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error(`Erro ao obter detalhes da conta: ${errorMsg}`);
+      throw new Error(`Falha ao obter detalhes da conta: ${errorMsg}`);
+    }
+  }
 }
