@@ -60,6 +60,13 @@ const data = {
           url: "/reproved",
           icon: UserX,
         },
+      ],
+    },
+    {
+      title: "Gestão de Contas",
+      url: "#",
+      icon: Bot,
+      items: [
         {
           title: "Contas",
           url: "/accounts",

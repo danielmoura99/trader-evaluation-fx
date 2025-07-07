@@ -20,9 +20,6 @@ export const columns: ColumnDef<NelogicaAccount>[] = [
   {
     accessorKey: "name",
     header: "Nome",
-    cell: ({ row }) => {
-      return <div className="text-zinc-100">{row.getValue("name")}</div>;
-    },
   },
   {
     accessorKey: "client",
@@ -61,19 +58,19 @@ export const columns: ColumnDef<NelogicaAccount>[] = [
       if (!client) return <span className="text-zinc-500">N/A</span>;
 
       return (
-        <div
-          className={`px-2 py-1 rounded-full text-xs font-medium inline-flex items-center ${
+        <span
+          className={`text-${
             client.traderStatus === "Em Curso"
-              ? "bg-blue-500/20 text-blue-400"
+              ? "blue"
               : client.traderStatus === "Aprovado"
-                ? "bg-green-500/20 text-green-400"
+                ? "green"
                 : client.traderStatus === "Reprovado"
-                  ? "bg-red-500/20 text-red-400"
-                  : "bg-yellow-500/20 text-yellow-400"
-          }`}
+                  ? "red"
+                  : "yellow"
+          }-500 font-medium`}
         >
           {client.traderStatus}
-        </div>
+        </span>
       );
     },
   },
@@ -83,15 +80,9 @@ export const columns: ColumnDef<NelogicaAccount>[] = [
     cell: ({ row }) => {
       const isBlocked = row.getValue("isBlocked");
       return (
-        <div
-          className={`px-2 py-1 rounded-full text-xs font-medium inline-flex items-center ${
-            isBlocked
-              ? "bg-red-500/20 text-red-400"
-              : "bg-green-500/20 text-green-400"
-          }`}
-        >
+        <span className={`text-${isBlocked ? "red" : "green"}-500 font-medium`}>
           {isBlocked ? "Bloqueada" : "Ativa"}
-        </div>
+        </span>
       );
     },
   },
@@ -100,21 +91,16 @@ export const columns: ColumnDef<NelogicaAccount>[] = [
     header: "Data de Validação",
     cell: ({ row }) => {
       const date = row.getValue("validatedAt");
-      if (!date) return <span className="text-zinc-500">N/A</span>;
-
-      return (
-        <div className="text-zinc-100">
-          {format(new Date(date as string), "dd/MM/yyyy", {
-            locale: ptBR,
-          })}
-        </div>
-      );
+      return date
+        ? format(new Date(date as string), "dd/MM/yyyy", { locale: ptBR })
+        : "-";
     },
   },
   {
     id: "actions",
     cell: ({ row }) => {
-      return <AccountActionButtons account={row.original} />;
+      const account = row.original;
+      return <AccountActionButtons account={account} />;
     },
   },
 ];
