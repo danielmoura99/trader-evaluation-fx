@@ -41,7 +41,7 @@ export function SubscriptionDetailsDialog({
     } else {
       setDetails(null);
     }
-  }, [open, subscription]);
+  }, [open, subscription]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadDetails = async () => {
     if (!subscription) return;

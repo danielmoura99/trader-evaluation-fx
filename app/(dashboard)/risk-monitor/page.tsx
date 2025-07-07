@@ -67,12 +67,12 @@ export default function RiskMonitorPage() {
         wsService.disconnect();
       }
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Carregar dados iniciais
   useEffect(() => {
     loadInitialData();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * Inicializa o serviço WebSocket
@@ -97,29 +97,37 @@ export default function RiskMonitorPage() {
 
     // Sempre tentar conectar na Nelogica real primeiro
     console.log("[Risk Monitor] Tentando conectar na Nelogica...");
+    console.log("[Risk Monitor] IP do servidor Nelogica: 191.252.154.12:36302");
+    console.log("[Risk Monitor] Verificando acessibilidade...");
+
     service
       .connect()
       .then(() => {
-        console.log("[Risk Monitor] Conexão WebSocket iniciada");
+        console.log("[Risk Monitor] ✅ Conexão WebSocket iniciada com sucesso");
       })
       .catch((error) => {
-        console.error("[Risk Monitor] Erro ao conectar WebSocket:", error);
+        console.error("[Risk Monitor] ❌ Erro detalhado ao conectar:", error);
 
-        // Se falhar, mostrar opção de modo simulado
+        // Mostrar diagnóstico específico
         toast({
-          title: "Erro de Conexão",
-          description:
-            "Falha ao conectar com Nelogica. Deseja usar modo simulado?",
+          title: "❌ Falha na Conexão Nelogica",
+          description: "Verifique o console para diagnóstico detalhado",
           variant: "destructive",
         });
 
-        // Após 5 segundos, ativar simulação se ainda não conectou
+        // Oferecer modo simulado após diagnóstico
         setTimeout(() => {
           if (!wsStatus.connected) {
-            console.log("[Risk Monitor] Ativando modo simulação...");
+            console.log(
+              "\n🔄 [Risk Monitor] Ativando modo simulação como fallback..."
+            );
+            toast({
+              title: "🔄 Ativando Modo Simulação",
+              description: "Conexão Nelogica falhou, usando dados fictícios",
+            });
             simulateWebSocketConnection(service);
           }
-        }, 5000);
+        }, 3000); // Reduzido para 3s para diagnóstico mais rápido
       });
   };
 

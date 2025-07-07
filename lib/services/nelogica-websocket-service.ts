@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // lib/services/nelogica-websocket-service.ts
 "use client";
@@ -27,7 +28,7 @@ interface AuthenticateMessage extends BaseMessage {
 
 interface KeepAliveMessage extends BaseMessage {
   name: "keepAlive";
-  msg: object;
+  msg: Record<string, never>;
 }
 
 interface SubscribeMessage extends BaseMessage {
@@ -81,45 +82,241 @@ export class NelogicaWebSocketService extends EventEmitter {
         this.disconnect();
       }
 
-      console.log("[Nelogica WebSocket] Conectando...");
+      console.log("[Nelogica WebSocket] Iniciando conexão...");
+      console.log("[Nelogica WebSocket] URL:", this.url);
+      console.log(
+        "[Nelogica WebSocket] Token:",
+        this.token ? `${this.token.substring(0, 8)}...` : "Não fornecido"
+      );
+
       this.emit("statusChange", { ...this.status, connected: false });
+
+      // Verificar se é ambiente seguro (HTTPS) com WebSocket não seguro (WS)
+      if (
+        typeof window !== "undefined" &&
+        window.location.protocol === "https:" &&
+        this.url.startsWith("ws://")
+      ) {
+        console.warn(
+          "[Nelogica WebSocket] ⚠️  AVISO: Tentando usar WS não seguro em página HTTPS"
+        );
+        console.warn(
+          "[Nelogica WebSocket] Isso pode ser bloqueado pelo navegador por questões de segurança"
+        );
+      }
 
       this.ws = new WebSocket(this.url);
 
-      this.ws.onopen = () => {
-        console.log("[Nelogica WebSocket] Conectado com sucesso");
-        this.status.connected = true;
-        this.status.reconnectAttempts = this.reconnectAttempts;
-        this.emit("statusChange", this.status);
-        this.authenticate();
-      };
+      // Promise para aguardar resultado da conexão
+      return new Promise((resolve, reject) => {
+        const connectionTimeout = setTimeout(() => {
+          console.error("[Nelogica WebSocket] ⏰ Timeout na conexão (10s)");
+          if (this.ws) {
+            this.ws.close();
+          }
+          reject(new Error("Timeout na conexão WebSocket"));
+        }, 10000);
 
-      this.ws.onmessage = (event) => {
-        this.handleMessage(event.data);
-      };
+        this.ws!.onopen = () => {
+          clearTimeout(connectionTimeout);
+          console.log(
+            "[Nelogica WebSocket] ✅ Conexão WebSocket estabelecida com sucesso!"
+          );
+          console.log("[Nelogica WebSocket] ReadyState:", this.ws?.readyState);
 
-      this.ws.onclose = (event) => {
-        console.log(
-          `[Nelogica WebSocket] Conexão fechada: ${event.code} - ${event.reason}`
-        );
-        this.status.connected = false;
-        this.status.authenticated = false;
-        this.emit("statusChange", this.status);
+          this.status.connected = true;
+          this.status.reconnectAttempts = this.reconnectAttempts;
+          this.emit("statusChange", this.status);
 
-        if (this.reconnectAttempts < this.maxReconnectAttempts) {
-          this.scheduleReconnect();
-        }
-      };
+          console.log("[Nelogica WebSocket] 🔐 Iniciando autenticação...");
+          this.authenticate();
+          resolve();
+        };
 
-      this.ws.onerror = (error) => {
-        console.error("[Nelogica WebSocket] Erro:", error);
-        this.emit("error", error);
-      };
+        this.ws!.onmessage = (event) => {
+          console.log(
+            "[Nelogica WebSocket] 📨 Mensagem recebida:",
+            event.data.substring(0, 100) + "..."
+          );
+          this.handleMessage(event.data);
+        };
+
+        this.ws!.onclose = (event) => {
+          clearTimeout(connectionTimeout);
+
+          // Códigos de erro mais comuns
+          const closeReasons: Record<number, string> = {
+            1000: "Fechamento normal",
+            1001: "Endpoint saindo (página fechando)",
+            1002: "Erro de protocolo",
+            1003: "Tipo de dados não suportado",
+            1004: "Reservado",
+            1005: "Código não fornecido",
+            1006: "Conexão fechada anormalmente (sem handshake de fechamento)",
+            1007: "Dados inconsistentes",
+            1008: "Violação de política",
+            1009: "Mensagem muito grande",
+            1010: "Extensão obrigatória ausente",
+            1011: "Erro interno do servidor",
+            1012: "Reinicialização do serviço",
+            1013: "Tente novamente mais tarde",
+            1014: "Gateway ruim",
+            1015: "Falha no handshake TLS",
+          };
+
+          const reason = closeReasons[event.code] || "Motivo desconhecido";
+
+          console.error(`[Nelogica WebSocket] 🔴 Conexão fechada:`);
+          console.error(`[Nelogica WebSocket] Código: ${event.code}`);
+          console.error(`[Nelogica WebSocket] Motivo: ${reason}`);
+          console.error(
+            `[Nelogica WebSocket] Detalhes: ${event.reason || "Nenhum detalhe fornecido"}`
+          );
+          console.error(
+            `[Nelogica WebSocket] Clean: ${event.wasClean ? "Sim" : "Não"}`
+          );
+
+          // Diagnósticos específicos
+          this.diagnoseProblem(event.code, event.reason);
+
+          this.status.connected = false;
+          this.status.authenticated = false;
+          this.emit("statusChange", this.status);
+
+          if (!this.status.connected && this.reconnectAttempts === 0) {
+            reject(
+              new Error(`Falha na conexão WebSocket (${event.code}): ${reason}`)
+            );
+          } else if (this.reconnectAttempts < this.maxReconnectAttempts) {
+            this.scheduleReconnect();
+          }
+        };
+
+        this.ws!.onerror = (error) => {
+          clearTimeout(connectionTimeout);
+          console.error("[Nelogica WebSocket] ❌ Erro detalhado:");
+          console.error("[Nelogica WebSocket] Tipo:", error.type);
+          console.error(
+            "[Nelogica WebSocket] Target readyState:",
+            (error.target as WebSocket)?.readyState
+          );
+          const wsTarget = error.target as WebSocket;
+          console.error(
+            "[Nelogica WebSocket] URL:",
+            wsTarget && "url" in wsTarget ? (wsTarget as any).url : "N/A"
+          );
+
+          // Diagnóstico adicional
+          this.diagnoseConnectionError();
+
+          this.emit("error", error);
+
+          if (this.reconnectAttempts === 0) {
+            reject(error);
+          }
+        };
+      });
     } catch (error) {
-      console.error("[Nelogica WebSocket] Erro ao conectar:", error);
+      console.error(
+        "[Nelogica WebSocket] ❌ Erro crítico ao tentar conectar:",
+        error
+      );
       this.emit("error", error);
       throw error;
     }
+  }
+
+  /**
+   * Diagnostica problemas específicos baseado no código de fechamento
+   */
+  private diagnoseProblem(code: number, reason: string): void {
+    console.log("\n🔍 [DIAGNÓSTICO NELOGICA WEBSOCKET] 🔍");
+
+    switch (code) {
+      case 1006:
+        console.log("🚨 PROBLEMA IDENTIFICADO: Conexão fechada anormalmente");
+        console.log("📋 POSSÍVEIS CAUSAS:");
+        console.log("   1. 🛡️  Firewall corporativo bloqueando WebSocket");
+        console.log("   2. 🌐 Proxy/VPN interferindo na conexão");
+        console.log("   3. 📍 IP não liberado na Nelogica (mais provável)");
+        console.log("   4. 🔒 Política CORS do navegador");
+        console.log("   5. ⚡ Servidor Nelogica temporariamente indisponível");
+        console.log("   6. 🔐 HTTPS → WS (protocolo misto) bloqueado");
+        console.log("\n💡 SOLUÇÕES RECOMENDADAS:");
+        console.log("   ✅ Solicitar liberação do seu IP na Nelogica");
+        console.log(
+          "   ✅ Verificar se o endereço 191.252.154.12:36302 está acessível"
+        );
+        console.log("   ✅ Testar em rede diferente (4G/celular)");
+        console.log("   ✅ Verificar se não há proxy/VPN ativo");
+        break;
+
+      case 1002:
+        console.log("🚨 PROBLEMA: Erro de protocolo WebSocket");
+        console.log(
+          "💡 CAUSA PROVÁVEL: Token ou formato de mensagem incorreto"
+        );
+        break;
+
+      case 1008:
+        console.log("🚨 PROBLEMA: Violação de política");
+        console.log("💡 CAUSA PROVÁVEL: IP não autorizado ou token inválido");
+        break;
+
+      case 1011:
+        console.log("🚨 PROBLEMA: Erro interno do servidor Nelogica");
+        console.log("💡 AÇÃO: Contatar suporte da Nelogica");
+        break;
+
+      default:
+        console.log(`🚨 CÓDIGO DE ERRO: ${code}`);
+        console.log("💡 Verificar documentação WebSocket ou contatar Nelogica");
+    }
+
+    console.log("\n📞 PRÓXIMOS PASSOS:");
+    console.log("   1. Anotar este erro e enviar para a Nelogica");
+    console.log(`   2. Informar seu IP atual: ${this.getCurrentIP()}`);
+    console.log("   3. Solicitar liberação/verificação do acesso WebSocket");
+    console.log("   4. Validar token de autenticação");
+    console.log("═══════════════════════════════════════════════════════\n");
+  }
+
+  /**
+   * Diagnostica erros gerais de conexão
+   */
+  private diagnoseConnectionError(): void {
+    console.log("\n🔍 [DIAGNÓSTICO DE ERRO] 🔍");
+
+    // Verificar protocolo
+    const isHttps =
+      typeof window !== "undefined" && window.location.protocol === "https:";
+    const isWsSecure = this.url.startsWith("wss://");
+
+    if (isHttps && !isWsSecure) {
+      console.log("🚨 PROBLEMA CRÍTICO: Mixed Content");
+      console.log(
+        "   📍 Página HTTPS tentando conectar em WebSocket não seguro (WS)"
+      );
+      console.log("   💡 SOLUÇÃO: Use WSS:// ou acesse via HTTP://");
+    }
+
+    console.log("📊 INFORMAÇÕES TÉCNICAS:");
+    console.log(`   🌐 URL: ${this.url}`);
+    console.log(
+      `   🔐 Protocolo da página: ${typeof window !== "undefined" ? window.location.protocol : "N/A"}`
+    );
+    console.log(`   🔒 WebSocket seguro: ${isWsSecure ? "Sim" : "Não"}`);
+    console.log(
+      `   🛡️  Mixed content: ${isHttps && !isWsSecure ? "SIM (PROBLEMA!)" : "Não"}`
+    );
+  }
+
+  /**
+   * Tenta obter IP atual do usuário
+   */
+  private getCurrentIP(): string {
+    // Em produção, você poderia fazer uma chamada para um serviço que retorna o IP
+    return "Verificar em https://whatismyipaddress.com/";
   }
 
   /**

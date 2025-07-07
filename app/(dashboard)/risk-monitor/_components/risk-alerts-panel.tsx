@@ -118,7 +118,7 @@ export function RiskAlertsPanel({
       .slice(0, 50); // Máximo 50 alertas
 
     setAlerts(filteredAlerts);
-  }, [riskData, soundEnabled]);
+  }, [riskData, soundEnabled, alerts, toast]);
 
   // Reproduzir som de alerta
   const playAlertSound = () => {

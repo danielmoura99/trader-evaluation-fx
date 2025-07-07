@@ -62,7 +62,7 @@ export default function SubscriptionsPage() {
 
   useEffect(() => {
     loadSubscriptions();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Funções para manipular a visualização de detalhes
   const handleViewDetails = (subscription: Subscription) => {
