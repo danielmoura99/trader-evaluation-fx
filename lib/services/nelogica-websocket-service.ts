@@ -49,6 +49,7 @@ interface SendMessage extends BaseMessage {
 
 /**
  * Classe para gerenciar WebSocket da Nelogica em tempo real
+ * VERSÃO SEM SIMULAÇÃO - Conecta apenas com servidor real
  */
 export class NelogicaWebSocketService extends EventEmitter {
   private ws: WebSocket | null = null;
@@ -122,58 +123,25 @@ export class NelogicaWebSocketService extends EventEmitter {
           console.log(
             "[Nelogica WebSocket] ✅ Conexão WebSocket estabelecida com sucesso!"
           );
-          console.log("[Nelogica WebSocket] ReadyState:", this.ws?.readyState);
 
           this.status.connected = true;
           this.status.reconnectAttempts = this.reconnectAttempts;
           this.emit("statusChange", this.status);
 
-          console.log("[Nelogica WebSocket] 🔐 Iniciando autenticação...");
+          // Autenticar automaticamente
           this.authenticate();
           resolve();
         };
 
         this.ws!.onmessage = (event) => {
-          console.log(
-            "[Nelogica WebSocket] 📨 Mensagem recebida:",
-            event.data.substring(0, 100) + "..."
-          );
           this.handleMessage(event.data);
         };
 
         this.ws!.onclose = (event) => {
           clearTimeout(connectionTimeout);
-
-          // Códigos de erro mais comuns
-          const closeReasons: Record<number, string> = {
-            1000: "Fechamento normal",
-            1001: "Endpoint saindo (página fechando)",
-            1002: "Erro de protocolo",
-            1003: "Tipo de dados não suportado",
-            1004: "Reservado",
-            1005: "Código não fornecido",
-            1006: "Conexão fechada anormalmente (sem handshake de fechamento)",
-            1007: "Dados inconsistentes",
-            1008: "Violação de política",
-            1009: "Mensagem muito grande",
-            1010: "Extensão obrigatória ausente",
-            1011: "Erro interno do servidor",
-            1012: "Reinicialização do serviço",
-            1013: "Tente novamente mais tarde",
-            1014: "Gateway ruim",
-            1015: "Falha no handshake TLS",
-          };
-
-          const reason = closeReasons[event.code] || "Motivo desconhecido";
-
-          console.error(`[Nelogica WebSocket] 🔴 Conexão fechada:`);
-          console.error(`[Nelogica WebSocket] Código: ${event.code}`);
-          console.error(`[Nelogica WebSocket] Motivo: ${reason}`);
-          console.error(
-            `[Nelogica WebSocket] Detalhes: ${event.reason || "Nenhum detalhe fornecido"}`
-          );
-          console.error(
-            `[Nelogica WebSocket] Clean: ${event.wasClean ? "Sim" : "Não"}`
+          const reason = event.reason || "Motivo não especificado";
+          console.log(
+            `[Nelogica WebSocket] Conexão fechada (${event.code}): ${reason}`
           );
 
           // Diagnósticos específicos
@@ -183,12 +151,23 @@ export class NelogicaWebSocketService extends EventEmitter {
           this.status.authenticated = false;
           this.emit("statusChange", this.status);
 
-          if (!this.status.connected && this.reconnectAttempts === 0) {
+          // Se for a primeira tentativa, rejeitar a promise
+          if (this.reconnectAttempts === 0) {
             reject(
               new Error(`Falha na conexão WebSocket (${event.code}): ${reason}`)
             );
-          } else if (this.reconnectAttempts < this.maxReconnectAttempts) {
+          }
+          // Caso contrário, tentar reconectar se dentro do limite
+          else if (this.reconnectAttempts < this.maxReconnectAttempts) {
             this.scheduleReconnect();
+          } else {
+            console.error(
+              "[Nelogica WebSocket] Máximo de tentativas de reconexão atingido"
+            );
+            this.emit(
+              "error",
+              new Error("Máximo de tentativas de reconexão atingido")
+            );
           }
         };
 
@@ -199,11 +178,6 @@ export class NelogicaWebSocketService extends EventEmitter {
           console.error(
             "[Nelogica WebSocket] Target readyState:",
             (error.target as WebSocket)?.readyState
-          );
-          const wsTarget = error.target as WebSocket;
-          console.error(
-            "[Nelogica WebSocket] URL:",
-            wsTarget && "url" in wsTarget ? (wsTarget as any).url : "N/A"
           );
 
           // Diagnóstico adicional
@@ -227,153 +201,60 @@ export class NelogicaWebSocketService extends EventEmitter {
   }
 
   /**
-   * Diagnostica problemas específicos baseado no código de fechamento
-   */
-  private diagnoseProblem(code: number, reason: string): void {
-    console.log("\n🔍 [DIAGNÓSTICO NELOGICA WEBSOCKET] 🔍");
-
-    switch (code) {
-      case 1006:
-        console.log("🚨 PROBLEMA IDENTIFICADO: Conexão fechada anormalmente");
-        console.log("📋 POSSÍVEIS CAUSAS:");
-        console.log("   1. 🛡️  Firewall corporativo bloqueando WebSocket");
-        console.log("   2. 🌐 Proxy/VPN interferindo na conexão");
-        console.log("   3. 📍 IP não liberado na Nelogica (mais provável)");
-        console.log("   4. 🔒 Política CORS do navegador");
-        console.log("   5. ⚡ Servidor Nelogica temporariamente indisponível");
-        console.log("   6. 🔐 HTTPS → WS (protocolo misto) bloqueado");
-        console.log("\n💡 SOLUÇÕES RECOMENDADAS:");
-        console.log("   ✅ Solicitar liberação do seu IP na Nelogica");
-        console.log(
-          "   ✅ Verificar se o endereço 191.252.154.12:36302 está acessível"
-        );
-        console.log("   ✅ Testar em rede diferente (4G/celular)");
-        console.log("   ✅ Verificar se não há proxy/VPN ativo");
-        break;
-
-      case 1002:
-        console.log("🚨 PROBLEMA: Erro de protocolo WebSocket");
-        console.log(
-          "💡 CAUSA PROVÁVEL: Token ou formato de mensagem incorreto"
-        );
-        break;
-
-      case 1008:
-        console.log("🚨 PROBLEMA: Violação de política");
-        console.log("💡 CAUSA PROVÁVEL: IP não autorizado ou token inválido");
-        break;
-
-      case 1011:
-        console.log("🚨 PROBLEMA: Erro interno do servidor Nelogica");
-        console.log("💡 AÇÃO: Contatar suporte da Nelogica");
-        break;
-
-      default:
-        console.log(`🚨 CÓDIGO DE ERRO: ${code}`);
-        console.log("💡 Verificar documentação WebSocket ou contatar Nelogica");
-    }
-
-    console.log("\n📞 PRÓXIMOS PASSOS:");
-    console.log("   1. Anotar este erro e enviar para a Nelogica");
-    console.log(`   2. Informar seu IP atual: ${this.getCurrentIP()}`);
-    console.log("   3. Solicitar liberação/verificação do acesso WebSocket");
-    console.log("   4. Validar token de autenticação");
-    console.log("═══════════════════════════════════════════════════════\n");
-  }
-
-  /**
-   * Diagnostica erros gerais de conexão
-   */
-  private diagnoseConnectionError(): void {
-    console.log("\n🔍 [DIAGNÓSTICO DE ERRO] 🔍");
-
-    // Verificar protocolo
-    const isHttps =
-      typeof window !== "undefined" && window.location.protocol === "https:";
-    const isWsSecure = this.url.startsWith("wss://");
-
-    if (isHttps && !isWsSecure) {
-      console.log("🚨 PROBLEMA CRÍTICO: Mixed Content");
-      console.log(
-        "   📍 Página HTTPS tentando conectar em WebSocket não seguro (WS)"
-      );
-      console.log("   💡 SOLUÇÃO: Use WSS:// ou acesse via HTTP://");
-    }
-
-    console.log("📊 INFORMAÇÕES TÉCNICAS:");
-    console.log(`   🌐 URL: ${this.url}`);
-    console.log(
-      `   🔐 Protocolo da página: ${typeof window !== "undefined" ? window.location.protocol : "N/A"}`
-    );
-    console.log(`   🔒 WebSocket seguro: ${isWsSecure ? "Sim" : "Não"}`);
-    console.log(
-      `   🛡️  Mixed content: ${isHttps && !isWsSecure ? "SIM (PROBLEMA!)" : "Não"}`
-    );
-  }
-
-  /**
-   * Tenta obter IP atual do usuário
-   */
-  private getCurrentIP(): string {
-    // Em produção, você poderia fazer uma chamada para um serviço que retorna o IP
-    return "Verificar em https://whatismyipaddress.com/";
-  }
-
-  /**
-   * Desconecta do WebSocket
+   * Desconecta o WebSocket
    */
   public disconnect(): void {
+    console.log("[Nelogica WebSocket] Desconectando...");
+
+    this.stopHeartbeat();
+    this.clearReconnectTimer();
+
     if (this.ws) {
-      this.ws.close();
+      this.ws.close(1000, "Desconexão solicitada pelo cliente");
       this.ws = null;
-    }
-
-    if (this.reconnectInterval) {
-      clearTimeout(this.reconnectInterval);
-      this.reconnectInterval = null;
-    }
-
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
     }
 
     this.status.connected = false;
     this.status.authenticated = false;
+    this.reconnectAttempts = 0;
     this.emit("statusChange", this.status);
   }
 
   /**
-   * Força uma tentativa de reconexão
-   */
-  public forceReconnect(): void {
-    this.reconnectAttempts = 0;
-    this.disconnect();
-    this.connect();
-  }
-
-  /**
-   * Agenda uma tentativa de reconexão
+   * Programa reconexão automática
    */
   private scheduleReconnect(): void {
+    this.clearReconnectTimer();
     this.reconnectAttempts++;
+
     console.log(
-      `[Nelogica WebSocket] Agendando reconexão (tentativa ${this.reconnectAttempts}/${this.maxReconnectAttempts})`
+      `[Nelogica WebSocket] Agendando reconexão em ${this.reconnectDelay}ms (tentativa ${this.reconnectAttempts}/${this.maxReconnectAttempts})`
     );
 
     this.reconnectInterval = setTimeout(() => {
-      this.connect();
-    }, this.reconnectDelay * this.reconnectAttempts); // Delay exponencial
+      console.log(
+        `[Nelogica WebSocket] Tentativa de reconexão ${this.reconnectAttempts}/${this.maxReconnectAttempts}`
+      );
+      this.connect().catch((error) => {
+        console.error("[Nelogica WebSocket] Falha na reconexão:", error);
+      });
+    }, this.reconnectDelay);
   }
 
   /**
-   * Autentica com o token fornecido
+   * Limpa o timer de reconexão
+   */
+  private clearReconnectTimer(): void {
+    if (this.reconnectInterval) {
+      clearTimeout(this.reconnectInterval);
+      this.reconnectInterval = null;
+    }
+  }
+
+  /**
+   * Autentica com o servidor
    */
   private authenticate(): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      return;
-    }
-
     const authMessage: AuthenticateMessage = {
       name: "authenticate",
       request_id: this.generateRequestId(),
@@ -382,11 +263,34 @@ export class NelogicaWebSocketService extends EventEmitter {
       },
     };
 
+    console.log("[Nelogica WebSocket] Enviando autenticação...");
     this.sendMessage(authMessage);
   }
 
   /**
-   * Inicia o heartbeat
+   * Envia mensagem para o WebSocket
+   */
+  private sendMessage(message: BaseMessage): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      const messageStr = JSON.stringify(message);
+      console.log(`[Nelogica WebSocket] Enviando: ${message.name}`);
+      this.ws.send(messageStr);
+    } else {
+      console.warn(
+        "[Nelogica WebSocket] Tentativa de envio com WebSocket fechado"
+      );
+    }
+  }
+
+  /**
+   * Gera ID único para requisições
+   */
+  private generateRequestId(): string {
+    return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Inicia heartbeat para manter conexão viva
    */
   private startHeartbeat(): void {
     this.stopHeartbeat();
@@ -476,284 +380,240 @@ export class NelogicaWebSocketService extends EventEmitter {
       this.subscribeToUpdates();
       this.emit("authenticated");
     } else {
-      console.error("[Nelogica WebSocket] Falha na autenticação");
-      this.emit("authenticationFailed");
+      console.error(
+        "[Nelogica WebSocket] Falha na autenticação:",
+        message.msg.error
+      );
+      this.emit("authenticationFailed", message.msg.error);
     }
   }
 
   /**
-   * Trata resultado de operações
-   */
-  private handleResult(message: any): void {
-    console.log("[Nelogica WebSocket] Resultado:", message.msg);
-    this.emit("result", message.msg);
-  }
-
-  /**
-   * Trata atualizações de saldo
-   */
-  private handleBalance(message: any): void {
-    const balances: WebSocketBalanceData[] = message.msg;
-    console.log(
-      `[Nelogica WebSocket] Atualizações de saldo: ${balances.length} contas`
-    );
-    this.emit("balanceUpdate", balances);
-  }
-
-  /**
-   * Trata atualizações de margem
-   */
-  private handleMargin(message: any): void {
-    const margins: WebSocketMarginData[] = message.msg;
-    console.log(
-      `[Nelogica WebSocket] Atualizações de margem: ${margins.length} contas`
-    );
-    this.emit("marginUpdate", margins);
-  }
-
-  /**
-   * Trata atualizações de risco
-   */
-  private handleRiskUpdate(message: any): void {
-    const risks: WebSocketRiskData[] = message.msg;
-    console.log(
-      `[Nelogica WebSocket] Atualizações de risco: ${risks.length} contas`
-    );
-    this.emit("riskUpdate", risks);
-  }
-
-  /**
-   * Trata atualizações de posição
-   */
-  private handlePositionUpdate(message: any): void {
-    const positions: WebSocketPositionData[] = message.msg;
-    console.log(
-      `[Nelogica WebSocket] Atualizações de posição: ${positions.length} contas`
-    );
-    this.emit("positionUpdate", positions);
-  }
-
-  /**
-   * Trata atualizações de bloqueio
-   */
-  private handleBlockingUpdate(message: any): void {
-    const blockings = message.msg;
-    console.log(
-      `[Nelogica WebSocket] Atualizações de bloqueio: ${blockings.length} contas`
-    );
-    this.emit("blockingUpdate", blockings);
-  }
-
-  /**
-   * Assina todas as atualizações necessárias
+   * Subscreve para receber atualizações em tempo real
    */
   private subscribeToUpdates(): void {
-    // Assinar atualizações de saldo
-    this.subscribeToBalanceChanges();
-
-    // Assinar atualizações de margem
-    this.subscribeToMarginChanges();
-
-    // Assinar atualizações de risco
-    this.subscribeToRiskChanges();
-
-    // Assinar atualizações de posição
-    this.subscribeToPositionChanges();
-
-    // Assinar atualizações de bloqueio
-    this.subscribeToBlockingChanges();
-  }
-
-  /**
-   * Assina mudanças de saldo
-   */
-  private subscribeToBalanceChanges(): void {
-    const subscribeMessage: SubscribeMessage = {
+    // Subscrever para atualizações de risco
+    const riskSubscription: SubscribeMessage = {
       name: "subscribeMessage",
       request_id: this.generateRequestId(),
       msg: {
-        name: "balance-changed",
+        name: "risk-update",
         body: {},
       },
     };
 
-    this.sendMessage(subscribeMessage);
-  }
-
-  /**
-   * Assina mudanças de margem
-   */
-  private subscribeToMarginChanges(): void {
-    const subscribeMessage: SubscribeMessage = {
+    // Subscrever para atualizações de posição
+    const positionSubscription: SubscribeMessage = {
       name: "subscribeMessage",
       request_id: this.generateRequestId(),
       msg: {
-        name: "margin-changed",
+        name: "position-update",
         body: {},
       },
     };
 
-    this.sendMessage(subscribeMessage);
-  }
-
-  /**
-   * Assina mudanças de risco
-   */
-  private subscribeToRiskChanges(): void {
-    const subscribeMessage: SubscribeMessage = {
+    // Subscrever para atualizações de bloqueio
+    const blockingSubscription: SubscribeMessage = {
       name: "subscribeMessage",
       request_id: this.generateRequestId(),
       msg: {
-        name: "risk-changed",
+        name: "blocking-update",
         body: {},
       },
     };
 
-    this.sendMessage(subscribeMessage);
-  }
-
-  /**
-   * Assina mudanças de posição
-   */
-  private subscribeToPositionChanges(): void {
-    const subscribeMessage: SubscribeMessage = {
-      name: "subscribeMessage",
-      request_id: this.generateRequestId(),
-      msg: {
-        name: "position-changed",
-        body: {},
-      },
-    };
-
-    this.sendMessage(subscribeMessage);
-  }
-
-  /**
-   * Assina mudanças de bloqueio
-   */
-  private subscribeToBlockingChanges(): void {
-    const subscribeMessage: SubscribeMessage = {
-      name: "subscribeMessage",
-      request_id: this.generateRequestId(),
-      msg: {
-        name: "blocking-changed",
-        body: {},
-      },
-    };
-
-    this.sendMessage(subscribeMessage);
+    this.sendMessage(riskSubscription);
+    this.sendMessage(positionSubscription);
+    this.sendMessage(blockingSubscription);
   }
 
   /**
    * Solicita dados de saldo
    */
-  public requestBalance(account?: string): void {
-    const sendMessage: SendMessage = {
+  public requestBalance(): void {
+    const balanceRequest: SendMessage = {
       name: "sendMessage",
       request_id: this.generateRequestId(),
       msg: {
-        name: "get-balance",
-        body: {
-          account: account,
-        },
+        name: "balance",
+        body: {},
       },
     };
 
-    this.sendMessage(sendMessage);
+    this.sendMessage(balanceRequest);
   }
 
   /**
    * Solicita dados de margem
    */
-  public requestMargin(account?: string): void {
-    const sendMessage: SendMessage = {
+  public requestMargin(): void {
+    const marginRequest: SendMessage = {
       name: "sendMessage",
       request_id: this.generateRequestId(),
       msg: {
-        name: "get-margin",
-        body: {
-          account: account,
-        },
+        name: "margin",
+        body: {},
       },
     };
 
-    this.sendMessage(sendMessage);
+    this.sendMessage(marginRequest);
   }
 
   /**
    * Solicita dados de risco
    */
-  public requestRisk(account?: string): void {
-    const sendMessage: SendMessage = {
+  public requestRisk(): void {
+    const riskRequest: SendMessage = {
       name: "sendMessage",
       request_id: this.generateRequestId(),
       msg: {
-        name: "get-risk-update",
-        body: {
-          account: account,
-        },
+        name: "risk",
+        body: {},
       },
     };
 
-    this.sendMessage(sendMessage);
+    this.sendMessage(riskRequest);
   }
 
   /**
    * Solicita dados de posição
    */
-  public requestPosition(account?: string): void {
-    const sendMessage: SendMessage = {
+  public requestPosition(): void {
+    const positionRequest: SendMessage = {
       name: "sendMessage",
       request_id: this.generateRequestId(),
       msg: {
-        name: "get-position-update",
-        body: {
-          account: account,
-        },
+        name: "position",
+        body: {},
       },
     };
 
-    this.sendMessage(sendMessage);
+    this.sendMessage(positionRequest);
   }
 
   /**
-   * Envia uma mensagem para o WebSocket
+   * Handlers para diferentes tipos de dados
    */
-  private sendMessage(message: BaseMessage): void {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(message));
-    } else {
-      console.warn(
-        "[Nelogica WebSocket] Tentativa de enviar mensagem com WebSocket não conectado"
-      );
+  private handleResult(message: any): void {
+    console.log("[Nelogica WebSocket] Resultado:", message);
+  }
+
+  private handleBalance(message: any): void {
+    console.log("[Nelogica WebSocket] Dados de saldo recebidos");
+    if (message.msg && Array.isArray(message.msg)) {
+      this.emit("balanceUpdate", message.msg as WebSocketBalanceData[]);
+    }
+  }
+
+  private handleMargin(message: any): void {
+    console.log("[Nelogica WebSocket] Dados de margem recebidos");
+    if (message.msg && Array.isArray(message.msg)) {
+      this.emit("marginUpdate", message.msg as WebSocketMarginData[]);
+    }
+  }
+
+  private handleRiskUpdate(message: any): void {
+    console.log("[Nelogica WebSocket] Atualização de risco recebida");
+    if (message.msg && Array.isArray(message.msg)) {
+      this.emit("riskUpdate", message.msg as WebSocketRiskData[]);
+    }
+  }
+
+  private handlePositionUpdate(message: any): void {
+    console.log("[Nelogica WebSocket] Atualização de posição recebida");
+    if (message.msg && Array.isArray(message.msg)) {
+      this.emit("positionUpdate", message.msg as WebSocketPositionData[]);
+    }
+  }
+
+  private handleBlockingUpdate(message: any): void {
+    console.log("[Nelogica WebSocket] Atualização de bloqueio recebida");
+    if (message.msg && Array.isArray(message.msg)) {
+      this.emit("blockingUpdate", message.msg);
     }
   }
 
   /**
-   * Gera um ID único para requisições
+   * Diagnostica problemas específicos baseado no código de fechamento
    */
-  private generateRequestId(): string {
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
-      /[xy]/g,
-      function (c) {
-        const r = (Math.random() * 16) | 0;
-        const v = c === "x" ? r : (r & 0x3) | 0x8;
-        return v.toString(16);
-      }
+  private diagnoseProblem(code: number, reason: string): void {
+    console.log("\n🔍 [DIAGNÓSTICO NELOGICA WEBSOCKET] 🔍");
+
+    switch (code) {
+      case 1006:
+        console.log("🚨 PROBLEMA IDENTIFICADO: Conexão fechada anormalmente");
+        console.log("📋 POSSÍVEIS CAUSAS:");
+        console.log("   1. 🛡️  Firewall corporativo bloqueando WebSocket");
+        console.log("   2. 🌐 Proxy/VPN interferindo na conexão");
+        console.log("   3. 📍 IP não liberado na Nelogica (mais provável)");
+        console.log("   4. 🔒 Política CORS do navegador");
+        console.log("   5. ⚡ Servidor Nelogica temporariamente indisponível");
+        console.log("   6. 🔐 HTTPS → WS (protocolo misto) bloqueado");
+        console.log("\n💡 SOLUÇÕES RECOMENDADAS:");
+        console.log("   ✅ Solicitar liberação do seu IP na Nelogica");
+        console.log(
+          "   ✅ Verificar se o endereço 191.252.154.12:36302 está acessível"
+        );
+        console.log("   ✅ Testar em rede diferente (4G/celular)");
+        console.log("   ✅ Verificar se não há proxy/VPN ativo");
+        break;
+
+      case 1002:
+        console.log("🚨 PROBLEMA: Erro de protocolo WebSocket");
+        console.log(
+          "💡 CAUSA PROVÁVEL: Token ou formato de mensagem incorreto"
+        );
+        break;
+
+      case 1008:
+        console.log("🚨 PROBLEMA: Violação de política");
+        console.log("💡 CAUSA PROVÁVEL: IP não autorizado ou token inválido");
+        break;
+
+      case 1011:
+        console.log("🚨 PROBLEMA: Erro interno do servidor Nelogica");
+        console.log("💡 AÇÃO: Contatar suporte da Nelogica");
+        break;
+
+      default:
+        console.log(`🚨 CÓDIGO DE ERRO: ${code}`);
+        console.log("💡 Verificar documentação WebSocket ou contatar Nelogica");
+    }
+
+    console.log("\n📞 PRÓXIMOS PASSOS:");
+    console.log("   1. Anotar este erro e enviar para a Nelogica");
+    console.log("   2. Solicitar liberação/verificação do acesso WebSocket");
+    console.log("   3. Validar token de autenticação");
+    console.log("═══════════════════════════════════════════════════════\n");
+  }
+
+  /**
+   * Diagnostica erros gerais de conexão
+   */
+  private diagnoseConnectionError(): void {
+    console.log("\n🔍 [DIAGNÓSTICO DE ERRO] 🔍");
+
+    // Verificar protocolo
+    const isHttps =
+      typeof window !== "undefined" && window.location.protocol === "https:";
+    const isWsSecure = this.url.startsWith("wss://");
+
+    if (isHttps && !isWsSecure) {
+      console.log("🚨 PROBLEMA CRÍTICO: Mixed Content");
+      console.log(
+        "   📍 Página HTTPS tentando conectar em WebSocket não seguro (WS)"
+      );
+      console.log("   💡 SOLUÇÃO: Use WSS:// ou acesse via HTTP://");
+    }
+
+    console.log("📊 INFORMAÇÕES TÉCNICAS:");
+    console.log(`   🌐 URL: ${this.url}`);
+    console.log(
+      `   🔐 Protocolo da página: ${typeof window !== "undefined" ? window.location.protocol : "N/A"}`
     );
-  }
-
-  /**
-   * Retorna o status atual da conexão
-   */
-  public getStatus(): WebSocketStatus {
-    return { ...this.status };
-  }
-
-  /**
-   * Verifica se está conectado e autenticado
-   */
-  public isReady(): boolean {
-    return this.status.connected && this.status.authenticated;
+    console.log(`   🔒 WebSocket seguro: ${isWsSecure ? "Sim" : "Não"}`);
+    console.log(
+      `   🛡️  Mixed content: ${isHttps && !isWsSecure ? "SIM (PROBLEMA!)" : "Não"}`
+    );
   }
 }

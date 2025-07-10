@@ -812,36 +812,207 @@ export class NelogicaApiClient {
   }
 
   /**
-   * Lista assinaturas
+   * Lista assinaturas com logs detalhados
    */
   public async listSubscriptions(params?: {
-    // Removemos subscriptionId já que não é suportado diretamente pela API
     customerId?: string;
     account?: string;
     pageNumber?: number;
     pageSize?: number;
   }): Promise<NelogicaSubscriptionsResponse> {
+    const requestId = `api_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
     try {
+      console.log(
+        `🔌 [${requestId}] ===== NELOGICA API CLIENT: LIST SUBSCRIPTIONS =====`
+      );
+
+      // Log dos parâmetros
+      console.log(
+        `📝 [${requestId}] Parâmetros da chamada:`,
+        params || "Nenhum parâmetro"
+      );
+
+      // Construir query string
       const queryParams = new URLSearchParams();
-
-      // Apenas adicionar parâmetros suportados
-      if (params?.customerId)
+      if (params?.customerId) {
         queryParams.append("customerId", params.customerId);
-      if (params?.account) queryParams.append("account", params.account);
-      if (params?.pageNumber)
+        console.log(
+          `🔍 [${requestId}] Filtro customerId: ${params.customerId}`
+        );
+      }
+      if (params?.account) {
+        queryParams.append("account", params.account);
+        console.log(`🔍 [${requestId}] Filtro account: ${params.account}`);
+      }
+      if (params?.pageNumber) {
         queryParams.append("pageNumber", params.pageNumber.toString());
-      if (params?.pageSize)
+        console.log(`📄 [${requestId}] Página: ${params.pageNumber}`);
+      }
+      if (params?.pageSize) {
         queryParams.append("pageSize", params.pageSize.toString());
+        console.log(`📄 [${requestId}] Tamanho da página: ${params.pageSize}`);
+      }
 
-      const url = `api/v2/manager/subscriptions${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
+      // Construir URL final
+      const endpoint = "api/v2/manager/subscriptions";
+      const queryString = queryParams.toString();
+      const url = `${endpoint}${queryString ? `?${queryString}` : ""}`;
+
+      console.log(`🌐 [${requestId}] Base URL: ${this.baseUrl}`);
+      console.log(`🔗 [${requestId}] Endpoint: ${endpoint}`);
+      console.log(
+        `🔗 [${requestId}] Query String: ${queryString || "Nenhuma"}`
+      );
+      console.log(`🔗 [${requestId}] URL Completa: ${this.baseUrl}/${url}`);
+
+      // Verificar autenticação antes da chamada
+      if (!this.isTokenValid()) {
+        console.log(
+          `🔐 [${requestId}] Token inválido ou expirado, fazendo login...`
+        );
+        await this.login();
+        console.log(`✅ [${requestId}] Login realizado com sucesso`);
+      } else {
+        console.log(
+          `✅ [${requestId}] Token válido, prosseguindo com a chamada`
+        );
+      }
+
+      // Log dos headers que serão enviados
+      const headers = {
+        ...this.apiClient.defaults.headers.common,
+        Authorization: `Bearer ${this.token?.substring(0, 20)}...`, // Log parcial do token
+      };
+      console.log(`📋 [${requestId}] Headers da requisição:`, headers);
 
       return await this.executeApiCall(async () => {
-        const response =
-          await this.apiClient.get<NelogicaSubscriptionsResponse>(url);
-        return response.data;
+        console.log(`📡 [${requestId}] Iniciando requisição HTTP...`);
+        const startTime = Date.now();
+
+        try {
+          const response =
+            await this.apiClient.get<NelogicaSubscriptionsResponse>(url);
+          const duration = Date.now() - startTime;
+
+          console.log(
+            `⏱️  [${requestId}] Requisição HTTP completada em ${duration}ms`
+          );
+          console.log(`📊 [${requestId}] Status HTTP: ${response.status}`);
+          console.log(`📊 [${requestId}] Status Text: ${response.statusText}`);
+
+          // Log dos headers de resposta
+          console.log(
+            `📋 [${requestId}] Headers de resposta:`,
+            response.headers
+          );
+
+          // Log da estrutura da resposta
+          console.log(
+            `📄 [${requestId}] Response.data.isSuccess:`,
+            response.data.isSuccess
+          );
+          console.log(
+            `📄 [${requestId}] Response.data.status:`,
+            response.data.status
+          );
+          console.log(
+            `📄 [${requestId}] Response.data.message:`,
+            response.data.message
+          );
+
+          if (response.data.data) {
+            const data = response.data.data;
+            console.log(
+              `📊 [${requestId}] Subscriptions array length:`,
+              data.subscriptions?.length || 0
+            );
+
+            if (data.parameters?.pagination) {
+              console.log(
+                `📄 [${requestId}] Pagination info:`,
+                data.parameters.pagination
+              );
+            }
+
+            if (data.subscriptions && data.subscriptions.length > 0) {
+              console.log(
+                `📋 [${requestId}] Primeira subscription (estrutura):`,
+                {
+                  subscriptionId: data.subscriptions[0].subscriptionId,
+                  licenseId: data.subscriptions[0].licenseId,
+                  customerId: data.subscriptions[0].customerId,
+                  planId: data.subscriptions[0].planId,
+                  createdAt: data.subscriptions[0].createdAt,
+                  accounts: Array.isArray(data.subscriptions[0].accounts)
+                    ? `Array com ${data.subscriptions[0].accounts.length} itens`
+                    : typeof data.subscriptions[0].accounts,
+                }
+              );
+
+              // Log das propriedades disponíveis
+              console.log(
+                `🔍 [${requestId}] Propriedades da primeira subscription:`,
+                Object.keys(data.subscriptions[0])
+              );
+            }
+          }
+
+          console.log(`✅ [${requestId}] ===== SUCESSO API CLIENT =====`);
+          return response.data;
+        } catch (httpError: any) {
+          const duration = Date.now() - startTime;
+
+          console.error(
+            `❌ [${requestId}] ===== ERRO HTTP NA REQUISIÇÃO =====`
+          );
+          console.error(`❌ [${requestId}] Tempo até o erro: ${duration}ms`);
+          console.error(
+            `❌ [${requestId}] Tipo do erro:`,
+            httpError?.constructor?.name || "Unknown"
+          );
+
+          if (httpError.response) {
+            console.error(
+              `🌐 [${requestId}] Status: ${httpError.response.status}`
+            );
+            console.error(
+              `🌐 [${requestId}] Status Text: ${httpError.response.statusText}`
+            );
+            console.error(
+              `🌐 [${requestId}] Headers: ${JSON.stringify(httpError.response.headers)}`
+            );
+            console.error(`🌐 [${requestId}] Data:`, httpError.response.data);
+          } else if (httpError.request) {
+            console.error(
+              `📡 [${requestId}] Request foi feito mas sem resposta`
+            );
+            console.error(`📡 [${requestId}] Request:`, httpError.request);
+          } else {
+            console.error(
+              `⚠️  [${requestId}] Erro ao configurar request:`,
+              httpError.message
+            );
+          }
+
+          if (httpError.code) {
+            console.error(`🏷️  [${requestId}] Error Code:`, httpError.code);
+          }
+
+          console.error(`❌ [${requestId}] ===== FIM ERRO HTTP =====`);
+          throw httpError;
+        }
       });
     } catch (error) {
-      console.error("[Nelogica API] Erro ao listar assinaturas:", error);
+      console.error(`❌ [${requestId}] ===== ERRO GERAL API CLIENT =====`);
+      console.error(`❌ [${requestId}] Erro ao listar assinaturas:`, error);
+
+      if (error instanceof Error) {
+        console.error(`❌ [${requestId}] Stack trace:`, error.stack);
+      }
+
+      console.error(`❌ [${requestId}] ===== FIM ERRO GERAL =====`);
+
       throw new Error(
         `Falha ao listar assinaturas: ${error instanceof Error ? error.message : String(error)}`
       );

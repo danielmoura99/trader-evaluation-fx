@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // app/(dashboard)/risk-monitor/_components/risk-alerts-panel.tsx
 "use client";
@@ -118,7 +119,7 @@ export function RiskAlertsPanel({
       .slice(0, 50); // Máximo 50 alertas
 
     setAlerts(filteredAlerts);
-  }, [riskData, soundEnabled, alerts, toast]);
+  }, [riskData, soundEnabled, toast]);
 
   // Reproduzir som de alerta
   const playAlertSound = () => {

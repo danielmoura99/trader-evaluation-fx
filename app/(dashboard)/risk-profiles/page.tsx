@@ -63,7 +63,7 @@ export default function RiskProfilesPage() {
 
   useEffect(() => {
     loadProfiles();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Abrir formulário para novo perfil
   const handleNewProfile = () => {

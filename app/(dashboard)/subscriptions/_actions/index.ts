@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // app/(dashboard)/subscriptions/_actions/index.ts
 "use server";
 
@@ -7,32 +8,113 @@ import { NelogicaService } from "@/lib/services/nelogica-service";
 import { logger } from "@/lib/logger";
 
 /**
- * Obtém todas as assinaturas da Nelogica
+ * Obtém todas as assinaturas da Nelogica com logs detalhados
  */
 export async function getSubscriptions() {
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
   try {
-    logger.info("Buscando assinaturas na Nelogica");
+    console.log(`🔍 [${requestId}] ===== INÍCIO DA BUSCA DE ASSINATURAS =====`);
+    console.log(`📅 [${requestId}] Timestamp: ${new Date().toISOString()}`);
 
-    // Instancia o serviço Nelogica
+    logger.info(`[${requestId}] Iniciando busca de assinaturas na Nelogica`);
+
+    // 1. Instanciar serviço Nelogica com logs
+    console.log(`⚙️  [${requestId}] Instanciando NelogicaService...`);
     const nelogicaService = new NelogicaService();
+    console.log(`✅ [${requestId}] NelogicaService instanciado com sucesso`);
 
-    // Busca as assinaturas na API da Nelogica
+    // 2. Buscar assinaturas na API da Nelogica
+    console.log(`🌐 [${requestId}] Fazendo chamada para API da Nelogica...`);
+    console.log(`🔗 [${requestId}] Endpoint: listSubscriptions()`);
+
+    const startTime = Date.now();
     const subscriptions = await nelogicaService.listSubscriptions();
+    const apiCallDuration = Date.now() - startTime;
 
-    // Busca os clientes correspondentes no banco local
+    console.log(
+      `⏱️  [${requestId}] Chamada API completada em ${apiCallDuration}ms`
+    );
+    console.log(
+      `📊 [${requestId}] Assinaturas retornadas da API: ${subscriptions.length}`
+    );
+
+    if (subscriptions.length > 0) {
+      console.log(`📋 [${requestId}] Primeira assinatura (exemplo):`, {
+        subscriptionId: subscriptions[0].subscriptionId,
+        licenseId: subscriptions[0].licenseId,
+        customerId: subscriptions[0].customerId,
+        createdAt: subscriptions[0].createdAt,
+        planId: subscriptions[0].planId || "N/A",
+        accounts: subscriptions[0].accounts?.length || 0,
+      });
+    }
+
+    // 3. Buscar clientes correspondentes no banco local
+    console.log(
+      `🗄️  [${requestId}] Buscando clientes correspondentes no banco local...`
+    );
+    const subscriptionIds = subscriptions.map((sub) => sub.subscriptionId);
+    console.log(
+      `🔍 [${requestId}] IDs de assinaturas para busca: [${subscriptionIds.join(", ")}]`
+    );
+
+    const dbStartTime = Date.now();
     const clients = await prisma.client.findMany({
       where: {
         nelogicaSubscriptionId: {
-          in: subscriptions.map((sub) => sub.subscriptionId),
+          in: subscriptionIds,
         },
       },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        cpf: true,
+        plan: true,
+        traderStatus: true,
+        nelogicaSubscriptionId: true,
+        startDate: true,
+        endDate: true,
+      },
     });
+    const dbCallDuration = Date.now() - dbStartTime;
 
-    // Combina os dados da Nelogica com os dados locais
-    const enrichedSubscriptions = subscriptions.map((subscription) => {
+    console.log(
+      `⏱️  [${requestId}] Consulta ao banco completada em ${dbCallDuration}ms`
+    );
+    console.log(
+      `👥 [${requestId}] Clientes encontrados no banco: ${clients.length}`
+    );
+
+    if (clients.length > 0) {
+      console.log(`👤 [${requestId}] Primeiro cliente (exemplo):`, {
+        id: clients[0].id,
+        name: clients[0].name,
+        email: clients[0].email,
+        nelogicaSubscriptionId: clients[0].nelogicaSubscriptionId,
+        traderStatus: clients[0].traderStatus,
+      });
+    }
+
+    // 4. Combinar dados da Nelogica com dados locais
+    console.log(
+      `🔗 [${requestId}] Combinando dados da Nelogica com dados locais...`
+    );
+
+    const enrichedSubscriptions = subscriptions.map((subscription, index) => {
       const client = clients.find(
         (c) => c.nelogicaSubscriptionId === subscription.subscriptionId
       );
+
+      if (index === 0) {
+        console.log(`🔍 [${requestId}] Primeira combinação (exemplo):`, {
+          subscriptionId: subscription.subscriptionId,
+          clientFound: !!client,
+          clientId: client?.id || "N/A",
+          clientName: client?.name || "N/A",
+        });
+      }
 
       return {
         ...subscription,
@@ -44,17 +126,88 @@ export async function getSubscriptions() {
               cpf: client.cpf,
               plan: client.plan,
               traderStatus: client.traderStatus,
+              startDate: client.startDate?.toISOString() || null,
+              endDate: client.endDate?.toISOString() || null,
             }
           : null,
       };
     });
 
-    logger.info(`${enrichedSubscriptions.length} assinaturas encontradas`);
+    console.log(`✅ [${requestId}] Dados combinados com sucesso`);
+    console.log(
+      `📊 [${requestId}] Assinaturas com clientes: ${enrichedSubscriptions.filter((s) => s.client).length}`
+    );
+    console.log(
+      `📊 [${requestId}] Assinaturas sem clientes: ${enrichedSubscriptions.filter((s) => !s.client).length}`
+    );
+
+    const totalDuration = Date.now() - startTime;
+    console.log(
+      `⏱️  [${requestId}] Operação total completada em ${totalDuration}ms`
+    );
+
+    logger.info(
+      `[${requestId}] ${enrichedSubscriptions.length} assinaturas encontradas e processadas`
+    );
+
+    console.log(`🎉 [${requestId}] ===== FIM DA BUSCA DE ASSINATURAS =====`);
+
     return enrichedSubscriptions;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    logger.error(`Erro ao obter assinaturas: ${errorMsg}`);
-    throw new Error("Falha ao obter assinaturas da Nelogica");
+
+    console.error(`❌ [${requestId}] ===== ERRO NA BUSCA DE ASSINATURAS =====`);
+    console.error(
+      `❌ [${requestId}] Tipo do erro:`,
+      error?.constructor?.name || "Unknown"
+    );
+    console.error(`❌ [${requestId}] Mensagem:`, errorMsg);
+
+    if (error instanceof Error) {
+      console.error(`❌ [${requestId}] Stack trace:`, error.stack);
+    }
+
+    // Se for erro de rede/HTTP, capturar mais detalhes
+    if (error && typeof error === "object") {
+      const errorObj = error as any;
+      if (errorObj.response) {
+        console.error(
+          `🌐 [${requestId}] Status HTTP:`,
+          errorObj.response.status
+        );
+        console.error(
+          `🌐 [${requestId}] Status Text:`,
+          errorObj.response.statusText
+        );
+        console.error(
+          `🌐 [${requestId}] Response Data:`,
+          errorObj.response.data
+        );
+        console.error(`🌐 [${requestId}] Headers:`, errorObj.response.headers);
+      }
+      if (errorObj.request) {
+        console.error(
+          `📡 [${requestId}] Request URL:`,
+          errorObj.config?.url || "N/A"
+        );
+        console.error(
+          `📡 [${requestId}] Request Method:`,
+          errorObj.config?.method || "N/A"
+        );
+        console.error(
+          `📡 [${requestId}] Request Headers:`,
+          errorObj.config?.headers || "N/A"
+        );
+      }
+      if (errorObj.code) {
+        console.error(`🏷️  [${requestId}] Error Code:`, errorObj.code);
+      }
+    }
+
+    console.error(`❌ [${requestId}] ===== FIM DO ERRO =====`);
+
+    logger.error(`[${requestId}] Erro ao obter assinaturas: ${errorMsg}`);
+    throw new Error(`Falha ao obter assinaturas da Nelogica: ${errorMsg}`);
   }
 }
 
