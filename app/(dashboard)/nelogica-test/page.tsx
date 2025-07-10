@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+//import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
   testNelogicaAuth,
@@ -30,6 +30,7 @@ import {
 } from "./_actions/index";
 import { NelogicaMonitor } from "./_components/nelogica-monitor";
 import { RiskProfileForm } from "./_components/risk-profile-form";
+import { ProxyStatus } from "./_components/proxy-status";
 
 export default function NelogicaTestPage() {
   const { toast } = useToast();
@@ -489,6 +490,14 @@ export default function NelogicaTestPage() {
         Teste da API Nelogica
       </h1>
 
+      {/* NOVA SEÇÃO: Status do Proxy */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold text-zinc-200 flex items-center">
+          🔗 Status do Proxy Fixie
+        </h2>
+        <ProxyStatus />
+      </div>
+
       {/* Status Cards */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card className="bg-zinc-900 border-zinc-800">
@@ -578,6 +587,25 @@ export default function NelogicaTestPage() {
                     Primeiro passo: Teste a conectividade e autenticação com a
                     API Nelogica
                   </p>
+                  {/* Indicador de Proxy */}
+                  <div className="mb-4 p-3 rounded-md bg-blue-500/10 border border-blue-500/20">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
+                        <span className="text-sm text-blue-400">
+                          {process.env.NEXT_PUBLIC_FIXIE_URL
+                            ? "Proxy Fixie Ativo"
+                            : "Conexão Direta"}
+                        </span>
+                      </div>
+                      <span className="text-xs text-blue-300">
+                        {process.env.NEXT_PUBLIC_FIXIE_URL
+                          ? "IP Fixo"
+                          : "IP Dinâmico"}
+                      </span>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 gap-2">
                     <Button
                       variant="outline"
@@ -1066,25 +1094,70 @@ export default function NelogicaTestPage() {
           </CardContent>
         </Card>
 
-        {/* Logs de Teste */}
+        {/* Logs Section */}
         <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-zinc-100">Logs de Teste</CardTitle>
-            <Button
-              variant="outline"
-              onClick={() => setLogs([])}
-              size="sm"
-              className="h-8"
-            >
-              Limpar
-            </Button>
+          <CardHeader>
+            <CardTitle className="text-zinc-100 flex items-center justify-between">
+              Logs de Execução
+              <div className="flex items-center space-x-2">
+                {/* Indicador de status do proxy */}
+                <div
+                  className={`h-2 w-2 rounded-full ${
+                    process.env.NEXT_PUBLIC_FIXIE_URL
+                      ? "bg-green-500"
+                      : "bg-yellow-500"
+                  }`}
+                ></div>
+                <span className="text-xs text-zinc-500">
+                  {process.env.NEXT_PUBLIC_FIXIE_URL ? "Proxy Ativo" : "Direto"}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setLogs([])}
+                  className="text-zinc-500 hover:text-zinc-300"
+                >
+                  Limpar
+                </Button>
+              </div>
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <Textarea
-              readOnly
-              className="h-[500px] bg-zinc-800 border-zinc-700 text-zinc-300 font-mono text-sm"
-              value={logs.join("\n")}
-            />
+            <div className="bg-zinc-950 rounded-md p-4 h-64 overflow-y-auto font-mono text-xs">
+              {logs.length === 0 ? (
+                <div className="text-zinc-500 text-center py-8">
+                  Nenhum log ainda. Execute alguma operação para ver os logs.
+                  <br />
+                  <span className="text-xs">
+                    {process.env.NEXT_PUBLIC_FIXIE_URL
+                      ? "🔗 Todas as requisições passarão pelo proxy Fixie"
+                      : "⚠️ Usando IP dinâmico - configure FIXIE_URL para IP fixo"}
+                  </span>
+                </div>
+              ) : (
+                logs.map((log, index) => (
+                  <div
+                    key={index}
+                    className={`mb-1 ${
+                      log.includes("✅")
+                        ? "text-green-400"
+                        : log.includes("❌")
+                          ? "text-red-400"
+                          : log.includes("🔄")
+                            ? "text-blue-400"
+                            : log.includes("🔗")
+                              ? "text-purple-400"
+                              : "text-zinc-300"
+                    }`}
+                  >
+                    <span className="text-zinc-500">
+                      [{new Date().toLocaleTimeString()}]
+                    </span>{" "}
+                    {log}
+                  </div>
+                ))
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>

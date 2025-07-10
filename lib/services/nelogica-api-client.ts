@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // lib/services/nelogica-api-client.ts
 import axios, { AxiosInstance } from "axios";
+import { ProxyService } from "./proxy-service";
 
 /**
  * Interfaces de resposta da API
@@ -195,6 +196,7 @@ export class NelogicaApiClient {
   private token: string | null = null;
   private tokenExpiry: Date | null = null;
   private isLoggingIn: boolean = false;
+  private proxyService: ProxyService;
 
   constructor(
     baseUrl: string,
@@ -202,16 +204,219 @@ export class NelogicaApiClient {
     private password: string
   ) {
     this.baseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+    this.proxyService = ProxyService.getInstance();
+
     this.apiClient = axios.create({
       baseURL: this.baseUrl,
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
+        "User-Agent": "TradersHouse-API-Client/1.0",
       },
       timeout: 10000,
     });
 
+    this.configureProxy();
+
+    this.setupInterceptors();
+
     console.log(`[Nelogica API] Cliente inicializado para ${this.baseUrl}`);
+  }
+
+  /**
+   * Configura o proxy Fixie se disponível
+   */
+  private configureProxy(): void {
+    const requestId = `proxy_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    console.log(`🔧 [${requestId}] ===== CONFIGURAÇÃO DE PROXY =====`);
+
+    const proxyInfo = this.proxyService.getProxyInfo();
+    console.log(`🔍 [${requestId}] Status do proxy:`, proxyInfo);
+
+    if (this.proxyService.isEnabled()) {
+      const proxyConfig = this.proxyService.getAxiosProxyConfig();
+
+      if (proxyConfig) {
+        // Configurar proxy padrão para todas as requisições
+        this.apiClient.defaults.proxy = proxyConfig;
+
+        console.log(`✅ [${requestId}] Proxy Fixie configurado com sucesso`);
+        console.log(
+          `🌐 [${requestId}] Host: ${proxyConfig.host}:${proxyConfig.port}`
+        );
+        console.log(`👤 [${requestId}] Usuário: ${proxyConfig.auth.username}`);
+        console.log(
+          `🔒 [${requestId}] Senha: ${proxyConfig.auth.password ? "****" : "não fornecida"}`
+        );
+      } else {
+        console.error(`❌ [${requestId}] Falha ao configurar proxy Fixie`);
+      }
+    } else {
+      console.log(
+        `⚠️  [${requestId}] Proxy não habilitado - usando conexão direta`
+      );
+      console.log(
+        `💡 [${requestId}] Para habilitar, configure FIXIE_URL no ambiente`
+      );
+    }
+
+    console.log(`🔧 [${requestId}] ===== FIM CONFIGURAÇÃO PROXY =====`);
+  }
+
+  /**
+   * Configura interceptors para logs detalhados
+   */
+  private setupInterceptors(): void {
+    // Request interceptor
+    this.apiClient.interceptors.request.use(
+      (config) => {
+        const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        console.log(`📡 [${requestId}] ===== REQUISIÇÃO SAINDO =====`);
+        console.log(`🔗 [${requestId}] URL: ${config.baseURL}${config.url}`);
+        console.log(
+          `📋 [${requestId}] Método: ${config.method?.toUpperCase()}`
+        );
+        console.log(`📋 [${requestId}] Headers:`, config.headers);
+
+        // Log do proxy se configurado
+        if (config.proxy) {
+          console.log(
+            `🔄 [${requestId}] Proxy: ${config.proxy.host}:${config.proxy.port}`
+          );
+          console.log(
+            `👤 [${requestId}] Proxy Auth: ${config.proxy.auth?.username || "N/A"}`
+          );
+        } else {
+          console.log(`🔄 [${requestId}] Proxy: Conexão direta`);
+        }
+
+        // Adicionar ID da requisição para tracking
+        config.data = { requestId, startTime: Date.now() };
+
+        return config;
+      },
+      (error) => {
+        console.error("❌ [Request Interceptor] Erro na requisição:", error);
+        return Promise.reject(error);
+      }
+    );
+
+    // Response interceptor
+    this.apiClient.interceptors.response.use(
+      (response) => {
+        const requestId = response.config.data?.requestId || "unknown";
+        const startTime = response.config.data?.startTime || Date.now();
+        const duration = Date.now() - startTime;
+
+        console.log(`📨 [${requestId}] ===== RESPOSTA RECEBIDA =====`);
+        console.log(`⏱️  [${requestId}] Duração: ${duration}ms`);
+        console.log(
+          `📊 [${requestId}] Status: ${response.status} ${response.statusText}`
+        );
+        console.log(
+          `📄 [${requestId}] Tamanho: ${JSON.stringify(response.data).length} bytes`
+        );
+
+        // Log específico para sucesso
+        if (response.data?.isSuccess) {
+          console.log(`✅ [${requestId}] API retornou sucesso`);
+        } else if (response.data?.isSuccess === false) {
+          console.log(
+            `⚠️  [${requestId}] API retornou erro: ${response.data.message}`
+          );
+        }
+
+        console.log(`📨 [${requestId}] ===== FIM RESPOSTA =====`);
+        return response;
+      },
+      (error) => {
+        const requestId = error.config?.metadata?.requestId || "unknown";
+        const startTime = error.config?.metadata?.startTime || Date.now();
+        const duration = Date.now() - startTime;
+
+        console.error(`❌ [${requestId}] ===== ERRO NA RESPOSTA =====`);
+        console.error(`⏱️  [${requestId}] Duração até erro: ${duration}ms`);
+
+        if (error.response) {
+          console.error(
+            `📊 [${requestId}] Status HTTP: ${error.response.status}`
+          );
+          console.error(
+            `📄 [${requestId}] Dados do erro:`,
+            error.response.data
+          );
+          console.error(
+            `📋 [${requestId}] Headers da resposta:`,
+            error.response.headers
+          );
+        } else if (error.request) {
+          console.error(`📡 [${requestId}] Requisição feita mas sem resposta`);
+          console.error(`🌐 [${requestId}] Detalhes da requisição:`, {
+            url: error.config?.url,
+            method: error.config?.method,
+            proxy: error.config?.proxy
+              ? `${error.config.proxy.host}:${error.config.proxy.port}`
+              : "direto",
+          });
+        } else {
+          console.error(
+            `⚙️  [${requestId}] Erro na configuração:`,
+            error.message
+          );
+        }
+
+        console.error(`❌ [${requestId}] ===== FIM ERRO =====`);
+        return Promise.reject(error);
+      }
+    );
+  }
+
+  /**
+   * Testa conectividade básica com logs aprimorados
+   */
+  public async testConnectivity(): Promise<boolean> {
+    const requestId = `test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    console.log(`🔍 [${requestId}] ===== TESTE DE CONECTIVIDADE =====`);
+    console.log(`🌐 [${requestId}] URL base: ${this.baseUrl}`);
+
+    const proxyInfo = this.proxyService.getProxyInfo();
+    console.log(`🔄 [${requestId}] Proxy status:`, proxyInfo);
+
+    const startTime = Date.now();
+
+    try {
+      // Tenta fazer uma requisição simples sem autenticação
+      await axios.get(`${this.baseUrl}/ping`, {
+        timeout: 5000,
+        validateStatus: () => true, // Aceita qualquer status de resposta
+        proxy: this.proxyService.getAxiosProxyConfig(), // Usar proxy se disponível
+      });
+
+      const elapsedTime = Date.now() - startTime;
+      console.log(
+        `✅ [${requestId}] Conectividade confirmada em ${elapsedTime}ms`
+      );
+      console.log(`🔍 [${requestId}] ===== FIM TESTE CONECTIVIDADE =====`);
+
+      return true;
+    } catch (error: any) {
+      const elapsedTime = Date.now() - startTime;
+      console.error(
+        `❌ [${requestId}] Falha na conectividade após ${elapsedTime}ms`
+      );
+      console.error(`❌ [${requestId}] Erro:`, error.message);
+
+      // Log detalhado de erros de rede
+      if (error.code) {
+        console.error(`🏷️  [${requestId}] Código do erro:`, error.code);
+      }
+
+      console.error(`🔍 [${requestId}] ===== FIM TESTE CONECTIVIDADE =====`);
+      return false;
+    }
   }
 
   private isTokenValid(): boolean {
@@ -1056,45 +1261,6 @@ export class NelogicaApiClient {
     }
   }
 
-  /**
-   * Testa a conectividade básica com o servidor da Nelogica
-   */
-  public async testConnectivity(): Promise<boolean> {
-    console.log(`[Nelogica API] Testando conectividade com ${this.baseUrl}`);
-    const startTime = Date.now();
-
-    try {
-      // Tenta fazer uma requisição simples sem autenticação
-      await axios.get(`${this.baseUrl}/ping`, {
-        timeout: 5000,
-        validateStatus: () => true, // Aceita qualquer status de resposta
-      });
-
-      const elapsedTime = Date.now() - startTime;
-      console.log(
-        `[Nelogica API] Conectividade confirmada em ${elapsedTime}ms`
-      );
-      return true;
-    } catch (error: any) {
-      const elapsedTime = Date.now() - startTime;
-      console.error(
-        `[Nelogica API] Falha na conectividade após ${elapsedTime}ms:`,
-        error.message
-      );
-
-      // Log detalhado de erros de rede
-      if (error.isAxiosError) {
-        console.error("[Nelogica API] Detalhes do erro de conectividade:", {
-          code: error.code,
-          message: error.message,
-          hostname: new URL(this.baseUrl).hostname,
-          port: new URL(this.baseUrl).port || "default",
-        });
-      }
-
-      return false;
-    }
-  }
   /**
    * Obtém detalhes de um cliente
    */
