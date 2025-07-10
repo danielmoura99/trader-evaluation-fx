@@ -3,23 +3,22 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // app/api/test-ip/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { ProxyService } from "@/lib/services/proxy-service";
+import { getServerProxyConfig } from "@/lib/services/proxy-service";
 
 /**
  * API Route para testar o IP atual da aplicação
- * Mostra se o proxy está funcionando corretamente
+ * Compatível com servidor - não usa cliente components
  */
 export async function GET(req: NextRequest) {
   const requestId = `testip_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
   try {
-    console.log(`🔍 [${requestId}] ===== TESTE DE IP =====`);
+    console.log(`🔍 [${requestId}] ===== TESTE DE IP (SERVIDOR) =====`);
 
-    // Obter informações do proxy
-    const proxyService = ProxyService.getInstance();
-    const proxyInfo = proxyService.getProxyInfo();
+    // Obter informações do proxy usando função compatível com servidor
+    const proxyConfig = getServerProxyConfig();
 
-    console.log(`🔧 [${requestId}] Status do proxy:`, proxyInfo);
+    console.log(`🔧 [${requestId}] Status do proxy:`, proxyConfig.info);
 
     // Configurar axios com proxy se disponível
     const axios = require("axios");
@@ -31,16 +30,13 @@ export async function GET(req: NextRequest) {
     };
 
     // Adicionar proxy se habilitado
-    if (proxyService.isEnabled()) {
-      const proxyConfig = proxyService.getAxiosProxyConfig();
-      if (proxyConfig) {
-        axiosConfig.proxy = proxyConfig;
-        console.log(
-          `🔄 [${requestId}] Usando proxy: ${proxyConfig.host}:${proxyConfig.port}`
-        );
-      }
+    if (proxyConfig.enabled && proxyConfig.config) {
+      axiosConfig.proxy = proxyConfig.config;
+      console.log(
+        `🔄 [${requestId}] Usando proxy: ${proxyConfig.config.host}:${proxyConfig.config.port}`
+      );
     } else {
-      console.log(`🔄 [${requestId}] Usando conexão direta`);
+      console.log(`🔄 [${requestId}] Usando conexão direta (sem proxy)`);
     }
 
     // Testar com múltiplos serviços para maior confiabilidade
@@ -72,19 +68,25 @@ export async function GET(req: NextRequest) {
             ip:
               response.data.origin?.split(",")[0]?.trim() ||
               response.data.origin,
-            provider: proxyInfo.enabled ? proxyInfo.provider : "Conexão Direta",
+            provider: proxyConfig.enabled
+              ? proxyConfig.info.provider
+              : "Conexão Direta",
             service: "httpbin.org",
           };
         } else if (service.includes("ipify.org")) {
           ipInfo = {
             ip: response.data.ip,
-            provider: proxyInfo.enabled ? proxyInfo.provider : "Conexão Direta",
+            provider: proxyConfig.enabled
+              ? proxyConfig.info.provider
+              : "Conexão Direta",
             service: "ipify.org",
           };
         } else if (service.includes("ipinfo.io")) {
           ipInfo = {
             ip: response.data.ip,
-            provider: proxyInfo.enabled ? proxyInfo.provider : "Conexão Direta",
+            provider: proxyConfig.enabled
+              ? proxyConfig.info.provider
+              : "Conexão Direta",
             country: response.data.country,
             city: response.data.city,
             region: response.data.region,
@@ -118,11 +120,11 @@ export async function GET(req: NextRequest) {
       ipInfo: {
         ...ipInfo,
         timestamp: new Date().toISOString(),
-        proxyUsed: proxyInfo.enabled,
-        proxyProvider: proxyInfo.enabled ? proxyInfo.provider : null,
-        proxyStatus: proxyInfo.status,
+        proxyUsed: proxyConfig.enabled,
+        proxyProvider: proxyConfig.enabled ? proxyConfig.info.provider : null,
+        proxyStatus: proxyConfig.info.status,
       },
-      proxyInfo: proxyInfo,
+      proxyInfo: proxyConfig.info,
       requestId: requestId,
     };
 
@@ -145,12 +147,15 @@ export async function GET(req: NextRequest) {
 
     console.error(`❌ [${requestId}] ===== FIM ERRO =====`);
 
+    // Obter info do proxy para incluir no erro
+    const proxyConfig = getServerProxyConfig();
+
     return NextResponse.json(
       {
         success: false,
         error: error.message,
         requestId: requestId,
-        proxyInfo: ProxyService.getInstance().getProxyInfo(),
+        proxyInfo: proxyConfig.info,
       },
       { status: 500 }
     );
@@ -171,8 +176,7 @@ export async function POST(req: NextRequest) {
     console.log(`🎯 [${requestId}] Target: ${target}`);
     console.log(`⏰ [${requestId}] Timeout: ${timeout}ms`);
 
-    const proxyService = ProxyService.getInstance();
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const proxyConfig = getServerProxyConfig();
     const axios = require("axios");
 
     const axiosConfig: any = {
@@ -182,8 +186,8 @@ export async function POST(req: NextRequest) {
       },
     };
 
-    if (proxyService.isEnabled()) {
-      axiosConfig.proxy = proxyService.getAxiosProxyConfig();
+    if (proxyConfig.enabled && proxyConfig.config) {
+      axiosConfig.proxy = proxyConfig.config;
     }
 
     const startTime = Date.now();
@@ -196,7 +200,7 @@ export async function POST(req: NextRequest) {
       success: true,
       data: response.data,
       duration: duration,
-      proxyUsed: proxyService.isEnabled(),
+      proxyUsed: proxyConfig.enabled,
       requestId: requestId,
     });
   } catch (error: any) {

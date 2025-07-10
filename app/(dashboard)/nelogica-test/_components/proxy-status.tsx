@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 // app/(dashboard)/nelogica-test/_components/proxy-status.tsx
 "use client";
@@ -49,59 +50,60 @@ export function ProxyStatus(): JSX.Element {
   }, []);
 
   /**
-   * Verifica o status do proxy
+   * Verifica o status do proxy (apenas lado do cliente)
    */
   const checkProxyStatus = async (): Promise<void> => {
     try {
-      // Verificar se ProxyService está disponível (lado do cliente)
-      if (typeof window !== "undefined") {
-        // Simular dados do proxy baseado nas variáveis de ambiente
-        const fixieUrl = process.env.NEXT_PUBLIC_FIXIE_URL;
+      // Verificar variáveis de ambiente do cliente
+      const fixieUrl = process.env.NEXT_PUBLIC_FIXIE_URL;
 
-        let proxyData: ProxyInfo = {
-          enabled: !!fixieUrl,
-          provider: fixieUrl ? "Fixie" : "none",
-          status: fixieUrl ? "active" : "disabled",
-        };
+      let proxyData: ProxyInfo = {
+        enabled: !!fixieUrl,
+        provider: fixieUrl ? "Fixie" : "none",
+        status: fixieUrl ? "active" : "disabled",
+      };
 
-        if (fixieUrl) {
-          try {
-            const url = new URL(fixieUrl);
-            proxyData = {
-              ...proxyData,
-              host: url.hostname,
-              port: url.port || "80",
-              maskedUrl: fixieUrl.replace(/:[^:@]*@/, ":****@"),
-            };
-          } catch (error) {
-            proxyData = {
-              ...proxyData,
-              status: "error",
-              error: "URL inválida",
-            };
-          }
+      if (fixieUrl) {
+        try {
+          const url = new URL(fixieUrl);
+          proxyData = {
+            ...proxyData,
+            host: url.hostname,
+            port: url.port || "80",
+            maskedUrl: fixieUrl.replace(/:[^:@]*@/, ":****@"),
+          };
+        } catch (error) {
+          proxyData = {
+            ...proxyData,
+            status: "error",
+            error: "URL inválida",
+          };
         }
-
-        setProxyInfo(proxyData);
       }
+
+      setProxyInfo(proxyData);
+      console.log("🔧 [ProxyStatus/Cliente] Status do proxy:", proxyData);
     } catch (error) {
-      console.error("Erro ao verificar status do proxy:", error);
+      console.error(
+        "❌ [ProxyStatus] Erro ao verificar status do proxy:",
+        error
+      );
     }
   };
 
   /**
-   * Testa o IP atual
+   * Testa o IP atual fazendo chamada para API route
    */
   const testCurrentIP = async (): Promise<void> => {
     setIsLoading(true);
     try {
-      console.log("🔍 [ProxyStatus] Testando IP atual...");
+      console.log("🔍 [ProxyStatus] Testando IP atual via API...");
 
-      // Fazer requisição para serviço que retorna IP
+      // Fazer requisição para nossa API route
       const response = await fetch("/api/test-ip");
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
@@ -119,11 +121,21 @@ export function ProxyStatus(): JSX.Element {
       } else {
         throw new Error(data.error || "Falha ao obter IP");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ [ProxyStatus] Erro ao testar IP:", error);
+
+      let errorMessage = "Não foi possível obter o IP atual.";
+
+      // Mensagens de erro mais específicas
+      if (error.message.includes("HTTP 500")) {
+        errorMessage = "Erro no servidor. Verifique os logs do console.";
+      } else if (error.message.includes("fetch")) {
+        errorMessage = "Erro de conexão. Verifique sua internet.";
+      }
+
       toast({
         title: "Erro ao verificar IP",
-        description: "Não foi possível obter o IP atual.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {

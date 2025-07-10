@@ -593,15 +593,13 @@ export default function NelogicaTestPage() {
                       <div className="flex items-center space-x-2">
                         <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
                         <span className="text-sm text-blue-400">
-                          {process.env.NEXT_PUBLIC_FIXIE_URL
+                          {process.env.NEXT_FIXIE_URL
                             ? "Proxy Fixie Ativo"
                             : "Conexão Direta"}
                         </span>
                       </div>
                       <span className="text-xs text-blue-300">
-                        {process.env.NEXT_PUBLIC_FIXIE_URL
-                          ? "IP Fixo"
-                          : "IP Dinâmico"}
+                        {process.env.NEXT_FIXIE_URL ? "IP Fixo" : "IP Dinâmico"}
                       </span>
                     </div>
                   </div>
@@ -1103,13 +1101,13 @@ export default function NelogicaTestPage() {
                 {/* Indicador de status do proxy */}
                 <div
                   className={`h-2 w-2 rounded-full ${
-                    process.env.NEXT_PUBLIC_FIXIE_URL
+                    process.env.NEXT_FIXIE_URL
                       ? "bg-green-500"
                       : "bg-yellow-500"
                   }`}
                 ></div>
                 <span className="text-xs text-zinc-500">
-                  {process.env.NEXT_PUBLIC_FIXIE_URL ? "Proxy Ativo" : "Direto"}
+                  {process.env.NEXT_FIXIE_URL ? "Proxy Ativo" : "Direto"}
                 </span>
                 <Button
                   variant="ghost"
@@ -1129,7 +1127,7 @@ export default function NelogicaTestPage() {
                   Nenhum log ainda. Execute alguma operação para ver os logs.
                   <br />
                   <span className="text-xs">
-                    {process.env.NEXT_PUBLIC_FIXIE_URL
+                    {process.env.NEXT_FIXIE_URL
                       ? "🔗 Todas as requisições passarão pelo proxy Fixie"
                       : "⚠️ Usando IP dinâmico - configure FIXIE_URL para IP fixo"}
                   </span>

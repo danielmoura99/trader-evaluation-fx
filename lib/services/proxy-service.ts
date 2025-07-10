@@ -1,10 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // lib/services/proxy-service.ts
-"use client";
-
 /**
  * Serviço para gerenciar configuração de proxy
- * Centraliza a lógica de proxy para todas as requisições HTTP
+ * Compatível tanto com servidor quanto cliente
  */
 export class ProxyService {
   private static instance: ProxyService;
@@ -23,26 +21,40 @@ export class ProxyService {
   }
 
   /**
+   * Método estático para uso direto no servidor
+   */
+  public static getServerInstance(): ProxyService {
+    return new ProxyService();
+  }
+
+  /**
    * Inicializa a configuração do proxy
    */
   private initializeProxy(): void {
     // Verifica se estamos no servidor (Node.js) ou no cliente
     if (typeof window === "undefined") {
-      // Servidor - pode acessar process.env
+      // Servidor - pode acessar process.env diretamente
       this.fixieUrl = process.env.FIXIE_URL || null;
     } else {
-      // Cliente - precisa usar variáveis públicas
+      // Cliente - usa variáveis públicas
       this.fixieUrl = process.env.NEXT_PUBLIC_FIXIE_URL || null;
     }
 
     this.isProxyEnabled = !!this.fixieUrl;
 
+    const environment = typeof window === "undefined" ? "servidor" : "cliente";
+
     if (this.isProxyEnabled) {
-      console.log("🔄 [ProxyService] Proxy Fixie detectado e habilitado");
-      console.log("🔗 [ProxyService] URL do proxy:", this.getMaskedUrl());
+      console.log(
+        `🔄 [ProxyService/${environment}] Proxy Fixie detectado e habilitado`
+      );
+      console.log(
+        `🔗 [ProxyService/${environment}] URL do proxy:`,
+        this.getMaskedUrl()
+      );
     } else {
       console.log(
-        "⚠️  [ProxyService] Proxy não configurado - usando conexão direta"
+        `⚠️  [ProxyService/${environment}] Proxy não configurado - usando conexão direta`
       );
     }
   }
@@ -131,5 +143,68 @@ export class ProxyService {
    */
   public reload(): void {
     this.initializeProxy();
+  }
+}
+
+/**
+ * Função utilitária para obter configuração do proxy no servidor
+ */
+export function getServerProxyConfig() {
+  const fixieUrl = process.env.FIXIE_URL;
+
+  if (!fixieUrl) {
+    return {
+      enabled: false,
+      config: null,
+      info: {
+        enabled: false,
+        provider: "none",
+        status: "disabled",
+      },
+    };
+  }
+
+  try {
+    const url = new URL(fixieUrl);
+
+    const config = {
+      protocol: "http",
+      host: url.hostname,
+      port: parseInt(url.port) || 80,
+      auth: {
+        username: url.username || "fixie",
+        password: url.password || "",
+      },
+    };
+
+    const info = {
+      enabled: true,
+      provider: "Fixie",
+      host: url.hostname,
+      port: url.port || "80",
+      status: "active",
+      maskedUrl: fixieUrl.replace(/:[^:@]*@/, ":****@"),
+    };
+
+    return {
+      enabled: true,
+      config,
+      info,
+    };
+  } catch (error) {
+    console.error(
+      "❌ [getServerProxyConfig] Erro ao parsear FIXIE_URL:",
+      error
+    );
+    return {
+      enabled: false,
+      config: null,
+      info: {
+        enabled: false,
+        provider: "Fixie",
+        status: "error",
+        error: "URL inválida",
+      },
+    };
   }
 }
