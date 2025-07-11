@@ -29,7 +29,8 @@ import { WebSocketStatus as WebSocketStatusComponent } from "./_components/webso
 import { RiskAlertsPanel } from "./_components/risk-alerts-panel";
 import { ExportControls } from "./_components/export-controls";
 import { MonitorConfig } from "./_components/monitor-config";
-import { NelogicaWebSocketService } from "@/lib/services/nelogica-websocket-service";
+//import { NelogicaWebSocketService } from "@/lib/services/nelogica-websocket-service";
+import { NelogicaWebSocketClient } from "@/lib/services/nelogica-websocket-client";
 import type {
   RiskMonitorData,
   WebSocketStatus,
@@ -48,7 +49,7 @@ export default function RiskMonitorPage() {
   const [showAlerts, setShowAlerts] = useState(false);
 
   // Estado do WebSocket
-  const [wsService, setWsService] = useState<NelogicaWebSocketService | null>(
+  const [wsService, setWsService] = useState<NelogicaWebSocketClient | null>(
     null
   );
   const [wsStatus, setWsStatus] = useState<WebSocketStatus>({
@@ -90,7 +91,8 @@ export default function RiskMonitorPage() {
     console.log("[Risk Monitor] URL:", wsUrl);
     console.log("[Risk Monitor] Token configurado:", token ? "Sim" : "Não");
 
-    const service = new NelogicaWebSocketService(wsUrl, token);
+    //const service = new NelogicaWebSocketService(wsUrl, token);
+    const service = new NelogicaWebSocketClient();
     setWsService(service);
 
     // Configurar event listeners
@@ -126,7 +128,7 @@ export default function RiskMonitorPage() {
   /**
    * Configura os listeners do WebSocket
    */
-  const setupWebSocketListeners = (service: NelogicaWebSocketService) => {
+  const setupWebSocketListeners = (service: NelogicaWebSocketClient) => {
     service.on("statusChange", (status: WebSocketStatus) => {
       console.log("[Risk Monitor] Status WebSocket mudou:", status);
       setWsStatus(status);
