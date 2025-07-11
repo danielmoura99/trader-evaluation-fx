@@ -552,7 +552,7 @@ export class NelogicaWebSocketService extends EventEmitter {
         console.log("\n💡 SOLUÇÕES RECOMENDADAS:");
         console.log("   ✅ Solicitar liberação do seu IP na Nelogica");
         console.log(
-          "   ✅ Verificar se o endereço 191.252.154.12:36302 está acessível"
+          "   ✅ Verificar se o endereço 191.252.154.12:36309 está acessível"
         );
         console.log("   ✅ Testar em rede diferente (4G/celular)");
         console.log("   ✅ Verificar se não há proxy/VPN ativo");

@@ -82,7 +82,7 @@ export default function RiskMonitorPage() {
   const initializeWebSocket = () => {
     // Dados reais da Nelogica fornecidos
     const wsUrl =
-      process.env.NEXT_PUBLIC_NELOGICA_WS_URL || "ws://191.252.154.12:36302";
+      process.env.NEXT_PUBLIC_NELOGICA_WS_URL || "ws://191.252.154.12:36309";
     const token =
       process.env.NEXT_PUBLIC_NELOGICA_WS_TOKEN ||
       "3dBtHNwjxWZmcPL8YzGSjLfSfM6xTveV";
@@ -100,7 +100,7 @@ export default function RiskMonitorPage() {
 
     // Sempre tentar conectar na Nelogica real primeiro
     console.log("[Risk Monitor] Tentando conectar na Nelogica...");
-    console.log("[Risk Monitor] IP do servidor Nelogica: 191.252.154.12:36302");
+    console.log("[Risk Monitor] IP do servidor Nelogica: 191.252.154.12:36309");
     console.log("[Risk Monitor] Verificando acessibilidade...");
 
     service

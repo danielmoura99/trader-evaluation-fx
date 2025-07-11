@@ -36,7 +36,7 @@ export class WebSocketBridge extends EventEmitter {
       console.log("🔧 [WebSocket Bridge] Iniciando constructor...");
 
       // Configurações da Nelogica UAT
-      this.url = "ws://191.252.154.12:36302";
+      this.url = "ws://191.252.154.12:36309";
       this.token =
         process.env.NELOGICA_WS_TOKEN || "3dBtHNwjxWZmcPL8YzGSjLfSfM6xTveV";
 

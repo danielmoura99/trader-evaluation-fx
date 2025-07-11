@@ -248,7 +248,7 @@ export function WebSocketStatus({
 
             {/* Servidor Info */}
             <div className="text-xs text-zinc-500 bg-zinc-800/50 px-2 py-1 rounded border border-zinc-700">
-              191.252.154.12:36302
+              191.252.154.12:36309
             </div>
           </div>
         </div>
