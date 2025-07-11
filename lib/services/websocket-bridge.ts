@@ -3,7 +3,8 @@
 import { EventEmitter } from "events";
 import WebSocket from "ws";
 import { ProxyService } from "./proxy-service";
-import { SocksProxyAgent } from "socks-proxy-agent";
+import { HttpsProxyAgent } from "https-proxy-agent";
+import { HttpProxyAgent } from "http-proxy-agent";
 
 interface NelogicaMessage {
   name: string;
@@ -30,32 +31,52 @@ export class WebSocketBridge extends EventEmitter {
   constructor() {
     super();
 
-    // Configurações da Nelogica UAT
-    this.url = "ws://191.252.154.12:36302";
-    this.token =
-      process.env.NELOGICA_WS_TOKEN || "3dBtHNwjxWZmcPL8YzGSjLfSfM6xTveV";
+    try {
+      console.log("🔧 [WebSocket Bridge] Iniciando constructor...");
 
-    // Inicializar ProxyService para IP fixo
-    this.proxyService = ProxyService.getServerInstance();
+      // Configurações da Nelogica UAT
+      this.url = "ws://191.252.154.12:36302";
+      this.token =
+        process.env.NELOGICA_WS_TOKEN || "3dBtHNwjxWZmcPL8YzGSjLfSfM6xTveV";
 
-    console.log("🌉 [WebSocket Bridge] Inicializado");
-    console.log(`🔗 [WebSocket Bridge] URL: ${this.url}`);
-    console.log(
-      `🔑 [WebSocket Bridge] Token: ${this.token.substring(0, 8)}...`
-    );
+      console.log("🔧 [WebSocket Bridge] Configurações básicas definidas");
+      console.log(`🔗 [WebSocket Bridge] URL: ${this.url}`);
+      console.log(
+        `🔑 [WebSocket Bridge] Token: ${this.token.substring(0, 8)}...`
+      );
+
+      // Inicializar ProxyService para IP fixo
+      console.log("🔧 [WebSocket Bridge] Inicializando ProxyService...");
+      this.proxyService = ProxyService.getServerInstance();
+      console.log("✅ [WebSocket Bridge] ProxyService inicializado");
+
+      console.log("✅ [WebSocket Bridge] Constructor concluído com sucesso");
+    } catch (error) {
+      console.error("❌ [WebSocket Bridge] Erro no constructor:", error);
+      throw error;
+    }
   }
 
   /**
    * Inicializa a conexão com a Nelogica
    */
   public async initialize(): Promise<void> {
-    console.log("🚀 [WebSocket Bridge] Iniciando conexão com Nelogica...");
+    console.log("🚀 [WebSocket Bridge] Iniciando método initialize...");
 
     try {
+      console.log("🔍 [WebSocket Bridge] Verificando ProxyService...");
+      const proxyInfo = this.proxyService.getProxyInfo();
+      console.log("🔍 [WebSocket Bridge] Proxy Info:", proxyInfo);
+
+      console.log("🔗 [WebSocket Bridge] Iniciando conexão...");
       await this.connect();
       console.log("✅ [WebSocket Bridge] Conexão estabelecida com sucesso");
     } catch (error) {
       console.error("❌ [WebSocket Bridge] Erro na inicialização:", error);
+      console.error(
+        "❌ [WebSocket Bridge] Stack trace:",
+        error instanceof Error ? error.stack : "N/A"
+      );
       throw error;
     }
   }
@@ -64,8 +85,13 @@ export class WebSocketBridge extends EventEmitter {
    * Conecta ao WebSocket da Nelogica usando proxy
    */
   private async connect(): Promise<void> {
+    console.log("🔌 [WebSocket Bridge] Entrando no método connect...");
+
     try {
       if (this.ws) {
+        console.log(
+          "🔌 [WebSocket Bridge] WebSocket existente, desconectando..."
+        );
         this.disconnect();
       }
 
@@ -73,17 +99,44 @@ export class WebSocketBridge extends EventEmitter {
       console.log(`🔌 [${requestId}] Iniciando conexão WebSocket...`);
 
       // Configurar proxy se disponível
+      console.log(`🔧 [${requestId}] Configurando opções WebSocket...`);
       const wsOptions: any = {};
 
+      console.log(`🔍 [${requestId}] Verificando se proxy está habilitado...`);
       if (this.proxyService.isEnabled()) {
+        console.log(
+          `✅ [${requestId}] Proxy habilitado, obtendo configuração...`
+        );
         const proxyConfig = this.proxyService.getAxiosProxyConfig();
 
         if (proxyConfig) {
-          // Converter configuração do Axios para WebSocket
-          const proxyUrl = `http://${proxyConfig.auth.username}:${proxyConfig.auth.password}@${proxyConfig.host}:${proxyConfig.port}`;
-          const agent = new SocksProxyAgent(proxyUrl);
+          console.log(`🔄 [${requestId}] Proxy config obtido:`, {
+            host: proxyConfig.host,
+            port: proxyConfig.port,
+            hasAuth: !!proxyConfig.auth,
+          });
 
-          wsOptions.agent = agent;
+          // Construir URL do proxy HTTP (não SOCKS)
+          const proxyUrl = `http://${proxyConfig.auth.username}:${proxyConfig.auth.password}@${proxyConfig.host}:${proxyConfig.port}`;
+          console.log(
+            `🔗 [${requestId}] Criando HttpProxyAgent para WebSocket...`
+          );
+          console.log(
+            `🔗 [${requestId}] Proxy URL: http://${proxyConfig.auth.username}:****@${proxyConfig.host}:${proxyConfig.port}`
+          );
+
+          try {
+            // Para WebSocket com proxy HTTP, usar HttpProxyAgent
+            const agent = new HttpProxyAgent(proxyUrl);
+            wsOptions.agent = agent;
+            console.log(`✅ [${requestId}] HttpProxyAgent criado com sucesso`);
+          } catch (agentError) {
+            console.error(
+              `❌ [${requestId}] Erro ao criar HttpProxyAgent:`,
+              agentError
+            );
+            throw agentError;
+          }
 
           console.log(
             `🔄 [${requestId}] Proxy configurado: ${proxyConfig.host}:${proxyConfig.port}`
@@ -91,15 +144,28 @@ export class WebSocketBridge extends EventEmitter {
           console.log(
             `👤 [${requestId}] Proxy user: ${proxyConfig.auth.username}`
           );
+        } else {
+          console.warn(`⚠️  [${requestId}] Proxy habilitado mas config é null`);
         }
       } else {
         console.log(`⚠️  [${requestId}] Proxy não disponível - conexão direta`);
       }
 
       // Criar conexão WebSocket
-      this.ws = new WebSocket(this.url, wsOptions);
+      console.log(`🔗 [${requestId}] Criando WebSocket para ${this.url}...`);
+      console.log(`🔗 [${requestId}] wsOptions configuradas`);
+
+      try {
+        this.ws = new WebSocket(this.url, wsOptions);
+        console.log(`✅ [${requestId}] WebSocket criado com sucesso`);
+      } catch (wsError) {
+        console.error(`❌ [${requestId}] Erro ao criar WebSocket:`, wsError);
+        throw wsError;
+      }
 
       return new Promise((resolve, reject) => {
+        console.log(`⏳ [${requestId}] Aguardando eventos do WebSocket...`);
+
         const connectionTimeout = setTimeout(() => {
           console.error(`⏰ [${requestId}] Timeout na conexão (15s)`);
           if (this.ws) {
@@ -117,11 +183,15 @@ export class WebSocketBridge extends EventEmitter {
           this.emitStatusChange();
 
           // Autenticar automaticamente
+          console.log(`🔐 [${requestId}] Iniciando autenticação...`);
           this.authenticate();
           resolve();
         });
 
         this.ws!.on("message", (data: Buffer) => {
+          console.log(
+            `📨 [${requestId}] Mensagem recebida (${data.length} bytes)`
+          );
           this.handleMessage(data.toString());
         });
 
@@ -150,13 +220,25 @@ export class WebSocketBridge extends EventEmitter {
         this.ws!.on("error", (error) => {
           clearTimeout(connectionTimeout);
           console.error(`❌ [${requestId}] Erro WebSocket:`, error);
+          console.error(`❌ [${requestId}] Erro detalhado:`, {
+            message: error.message,
+            code: (error as any).code,
+            errno: (error as any).errno,
+            syscall: (error as any).syscall,
+            address: (error as any).address,
+            port: (error as any).port,
+          });
 
           this.emit("error", error);
           reject(error);
         });
       });
     } catch (error) {
-      console.error("❌ [WebSocket Bridge] Erro crítico:", error);
+      console.error("❌ [WebSocket Bridge] Erro crítico no connect:", error);
+      console.error(
+        "❌ [WebSocket Bridge] Stack trace:",
+        error instanceof Error ? error.stack : "N/A"
+      );
       throw error;
     }
   }
@@ -360,7 +442,7 @@ export class WebSocketBridge extends EventEmitter {
     return `bridge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
-  // Métodos públicos para verificar status (renomeados para evitar conflito)
+  // Métodos públicos para verificar status
   public isConnected(): boolean {
     return this._isConnected;
   }
