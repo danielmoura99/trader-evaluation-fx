@@ -20,8 +20,8 @@ export class WebSocketBridge extends EventEmitter {
   private url: string;
   private token: string;
   private proxyService: ProxyService;
-  private isConnected: boolean = false;
-  private isAuthenticated: boolean = false;
+  private _isConnected: boolean = false;
+  private _isAuthenticated: boolean = false;
   private reconnectInterval: NodeJS.Timeout | null = null;
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private reconnectAttempts: number = 0;
@@ -73,7 +73,7 @@ export class WebSocketBridge extends EventEmitter {
       console.log(`🔌 [${requestId}] Iniciando conexão WebSocket...`);
 
       // Configurar proxy se disponível
-      let wsOptions: any = {};
+      const wsOptions: any = {};
 
       if (this.proxyService.isEnabled()) {
         const proxyConfig = this.proxyService.getAxiosProxyConfig();
@@ -112,7 +112,7 @@ export class WebSocketBridge extends EventEmitter {
           clearTimeout(connectionTimeout);
           console.log(`✅ [${requestId}] WebSocket conectado à Nelogica!`);
 
-          this.isConnected = true;
+          this._isConnected = true;
           this.reconnectAttempts = 0;
           this.emitStatusChange();
 
@@ -131,8 +131,8 @@ export class WebSocketBridge extends EventEmitter {
             `🔌 [${requestId}] Conexão fechada (${code}): ${reason.toString()}`
           );
 
-          this.isConnected = false;
-          this.isAuthenticated = false;
+          this._isConnected = false;
+          this._isAuthenticated = false;
           this.emitStatusChange();
 
           // Tentar reconectar se necessário
@@ -174,8 +174,8 @@ export class WebSocketBridge extends EventEmitter {
       this.ws = null;
     }
 
-    this.isConnected = false;
-    this.isAuthenticated = false;
+    this._isConnected = false;
+    this._isAuthenticated = false;
     this.emitStatusChange();
   }
 
@@ -206,7 +206,7 @@ export class WebSocketBridge extends EventEmitter {
       // Tratar autenticação
       if (message.name === "authenticationSuccessful") {
         console.log("✅ [WebSocket Bridge] Autenticado com sucesso!");
-        this.isAuthenticated = true;
+        this._isAuthenticated = true;
         this.emitStatusChange();
         this.startHeartbeat();
         this.subscribeToUpdates();
@@ -240,7 +240,7 @@ export class WebSocketBridge extends EventEmitter {
    */
   public async sendCommand(command: any): Promise<any> {
     return new Promise((resolve, reject) => {
-      if (!this.isConnected || !this.isAuthenticated) {
+      if (!this._isConnected || !this._isAuthenticated) {
         reject(new Error("WebSocket não conectado ou não autenticado"));
         return;
       }
@@ -344,8 +344,8 @@ export class WebSocketBridge extends EventEmitter {
    */
   private emitStatusChange(): void {
     const status = {
-      connected: this.isConnected,
-      authenticated: this.isAuthenticated,
+      connected: this._isConnected,
+      authenticated: this._isAuthenticated,
       reconnectAttempts: this.reconnectAttempts,
       lastHeartbeat: new Date().toISOString(),
     };
@@ -360,12 +360,23 @@ export class WebSocketBridge extends EventEmitter {
     return `bridge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
-  // Métodos públicos para status
+  // Métodos públicos para verificar status (renomeados para evitar conflito)
   public isConnected(): boolean {
-    return this.isConnected;
+    return this._isConnected;
   }
 
   public isAuthenticated(): boolean {
-    return this.isAuthenticated;
+    return this._isAuthenticated;
+  }
+
+  /**
+   * Getter para status de conexão (alternativa aos métodos)
+   */
+  public get connectionStatus() {
+    return {
+      connected: this._isConnected,
+      authenticated: this._isAuthenticated,
+      reconnectAttempts: this.reconnectAttempts,
+    };
   }
 }
