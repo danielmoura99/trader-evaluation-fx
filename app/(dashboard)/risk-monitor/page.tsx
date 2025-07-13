@@ -85,7 +85,7 @@ export default function RiskMonitorPage() {
       process.env.NEXT_PUBLIC_NELOGICA_WS_URL || "ws://191.252.154.12:36309";
     const token =
       process.env.NEXT_PUBLIC_NELOGICA_WS_TOKEN ||
-      "3dBtHNwjxWZmcPL8YzGSjLfSfM6xTveV";
+      "JwdMUDnWVfq39Fcdj4VjLSEjYtPYQNiq";
 
     console.log("[Risk Monitor] Inicializando WebSocket da Nelogica");
     console.log("[Risk Monitor] URL:", wsUrl);
