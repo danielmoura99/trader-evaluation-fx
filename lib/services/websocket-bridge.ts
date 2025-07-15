@@ -1,7 +1,13 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // lib/services/websocket-bridge.ts
+
+// SOLUÇÃO DEFINITIVA: Forçar WebSocket puro JS sem binários C++
+process.env.WS_NO_BUFFER_UTIL = "1";
+process.env.WS_NO_UTF_8_VALIDATE = "1";
+
 import { EventEmitter } from "events";
-import WebSocket from "isomorphic-ws";
+import WebSocket from "ws";
 import { ProxyService } from "./proxy-service";
 import { HttpProxyAgent } from "http-proxy-agent";
 import * as tunnel from "tunnel";
@@ -14,7 +20,7 @@ interface NelogicaMessage {
 
 /**
  * Bridge WebSocket que conecta no servidor da Nelogica usando IP fixo (Fixie)
- * Roda no servidor Next.js e faz relay para os clientes browser
+ * Implementação baseada na documentação oficial da Nelogica WebSocket V1.0.2
  */
 export class WebSocketBridge extends EventEmitter {
   private ws: WebSocket | null = null;
@@ -37,7 +43,7 @@ export class WebSocketBridge extends EventEmitter {
       // Configurações da Nelogica UAT
       this.url = "ws://191.252.154.12:36309";
       this.token =
-        process.env.NELOGICA_WS_TOKEN || "JwdMUDnWVfq39Fcdj4VjLSEjYtPYQNiq";
+        process.env.NELOGICA_WS_TOKEN || "U88rPdy1DT61Ktk5ANNj8CVdERtw0N4E";
 
       console.log("🔧 [WebSocket Bridge] Configurações básicas definidas");
       console.log(`🔗 [WebSocket Bridge] URL: ${this.url}`);
@@ -73,10 +79,6 @@ export class WebSocketBridge extends EventEmitter {
       console.log("✅ [WebSocket Bridge] Conexão estabelecida com sucesso");
     } catch (error) {
       console.error("❌ [WebSocket Bridge] Erro na inicialização:", error);
-      console.error(
-        "❌ [WebSocket Bridge] Stack trace:",
-        error instanceof Error ? error.stack : "N/A"
-      );
       throw error;
     }
   }
@@ -89,45 +91,31 @@ export class WebSocketBridge extends EventEmitter {
 
     try {
       if (this.ws) {
-        console.log(
-          "🔌 [WebSocket Bridge] WebSocket existente, desconectando..."
-        );
         this.disconnect();
       }
 
       const requestId = `bridge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       console.log(`🔌 [${requestId}] Iniciando conexão WebSocket...`);
 
-      // Configurar proxy se disponível
-      console.log(`🔧 [${requestId}] Configurando opções WebSocket...`);
+      // Configurar opções WebSocket - FORÇAR JS PURO
+      console.log(
+        `🔧 [${requestId}] Configurando WebSocket com JS puro (sem binários C++)...`
+      );
       const wsOptions: any = {
-        // Headers específicos para WebSocket
         headers: {
           "User-Agent": "TradersHouse-Bridge/1.0",
-          //"Sec-WebSocket-Protocol": "chat",
         },
+        handshakeTimeout: 15000,
+        perMessageDeflate: false, // Desabilitar compressão
+        skipUTF8Validation: true, // Pular validação UTF-8 nativa
+        maxPayload: 100 * 1024 * 1024, // 100MB
       };
 
-      console.log(`🔍 [${requestId}] Verificando se proxy está habilitado...`);
+      // Configurar proxy se disponível
       if (this.proxyService.isEnabled()) {
-        console.log(
-          `✅ [${requestId}] Proxy habilitado, configurando túnel...`
-        );
         const proxyConfig = this.proxyService.getAxiosProxyConfig();
-
         if (proxyConfig) {
-          console.log(`🔄 [${requestId}] Proxy config obtido:`, {
-            host: proxyConfig.host,
-            port: proxyConfig.port,
-            hasAuth: !!proxyConfig.auth,
-          });
-
           try {
-            // Método 1: Tentar com tunnel agent para CONNECT method
-            console.log(
-              `🚇 [${requestId}] Tentando criar túnel HTTP CONNECT...`
-            );
-
             const tunnelAgent = tunnel.httpOverHttp({
               proxy: {
                 host: proxyConfig.host,
@@ -135,75 +123,35 @@ export class WebSocketBridge extends EventEmitter {
                 proxyAuth: `${proxyConfig.auth.username}:${proxyConfig.auth.password}`,
               },
             });
-
             wsOptions.agent = tunnelAgent;
             console.log(`✅ [${requestId}] Túnel HTTP CONNECT configurado`);
           } catch (tunnelError) {
-            console.warn(
-              `⚠️  [${requestId}] Erro no túnel, tentando HttpProxyAgent...`,
-              tunnelError
-            );
-
-            // Fallback: HttpProxyAgent simples
+            console.warn(`⚠️  [${requestId}] Fallback para HttpProxyAgent...`);
             const proxyUrl = `http://${proxyConfig.auth.username}:${proxyConfig.auth.password}@${proxyConfig.host}:${proxyConfig.port}`;
-            const agent = new HttpProxyAgent(proxyUrl);
-            wsOptions.agent = agent;
-            console.log(
-              `✅ [${requestId}] HttpProxyAgent configurado como fallback`
-            );
+            wsOptions.agent = new HttpProxyAgent(proxyUrl);
           }
-
-          console.log(
-            `🔄 [${requestId}] Proxy configurado: ${proxyConfig.host}:${proxyConfig.port}`
-          );
-          console.log(
-            `👤 [${requestId}] Proxy user: ${proxyConfig.auth.username}`
-          );
-        } else {
-          console.warn(`⚠️  [${requestId}] Proxy habilitado mas config é null`);
         }
-      } else {
-        console.log(`⚠️  [${requestId}] Proxy não disponível - conexão direta`);
       }
 
       // Criar conexão WebSocket
       console.log(`🔗 [${requestId}] Criando WebSocket para ${this.url}...`);
-      console.log(
-        `🔗 [${requestId}] wsOptions configuradas com agent type:`,
-        wsOptions.agent?.constructor?.name || "none"
-      );
-
-      try {
-        this.ws = new WebSocket(this.url, wsOptions);
-        console.log(`✅ [${requestId}] WebSocket criado com sucesso`);
-      } catch (wsError) {
-        console.error(`❌ [${requestId}] Erro ao criar WebSocket:`, wsError);
-        throw wsError;
-      }
+      this.ws = new WebSocket(this.url, wsOptions);
 
       return new Promise((resolve, reject) => {
-        console.log(`⏳ [${requestId}] Aguardando eventos do WebSocket...`);
-
         const connectionTimeout = setTimeout(() => {
-          console.error(`⏰ [${requestId}] Timeout na conexão (30s)`);
-          if (this.ws) {
-            this.ws.close();
-          }
+          console.error(`⏰ [${requestId}] Timeout na conexão (15s)`);
+          if (this.ws) this.ws.close();
           reject(new Error("Timeout na conexão WebSocket"));
-        }, 30000); // Aumentar timeout para 30s
+        }, 15000);
 
         this.ws!.on("open", () => {
           clearTimeout(connectionTimeout);
-          console.log(`✅ [${requestId}] WebSocket conectado à Nelogica!`);
-          console.log(
-            `🎯 [${requestId}] ReadyState: ${this.ws?.readyState} (OPEN=1)`
-          );
+          console.log(`✅ [${requestId}] 🎉 WebSocket conectado à Nelogica!`);
 
           this._isConnected = true;
           this.reconnectAttempts = 0;
           this.emitStatusChange();
 
-          // Autenticar automaticamente
           console.log(`🔐 [${requestId}] Iniciando autenticação...`);
           this.authenticate();
           resolve();
@@ -221,89 +169,35 @@ export class WebSocketBridge extends EventEmitter {
           console.log(
             `🔌 [${requestId}] Conexão fechada (${code}): ${reason.toString()}`
           );
-          console.log(`🔍 [${requestId}] Close code details:`, {
-            code,
-            reason: reason.toString(),
-            wasClean: code === 1000,
-            isNormalClosure: code >= 1000 && code <= 1015,
-          });
 
           this._isConnected = false;
           this._isAuthenticated = false;
           this.emitStatusChange();
 
-          // Tentar reconectar se necessário
           if (this.reconnectAttempts < this.maxReconnectAttempts) {
             this.scheduleReconnect();
-          } else {
-            console.error(`❌ [${requestId}] Máximo de tentativas atingido`);
-            this.emit(
-              "error",
-              new Error("Máximo de tentativas de reconexão atingido")
-            );
           }
         });
 
         this.ws!.on("error", (error) => {
           clearTimeout(connectionTimeout);
           console.error(`❌ [${requestId}] Erro WebSocket:`, error);
-          console.error(`❌ [${requestId}] Erro detalhado:`, {
-            message: error.message,
-            code: (error as any).code,
-            errno: (error as any).errno,
-            syscall: (error as any).syscall,
-            address: (error as any).address,
-            port: (error as any).port,
-            stack: error.stack,
-          });
-
           this.emit("error", error);
           reject(error);
-        });
-
-        // Log adicional do estado da conexão
-        this.ws!.on("ping", (data) => {
-          console.log(`🏓 [${requestId}] Ping recebido:`, data.toString());
-        });
-
-        this.ws!.on("pong", (data) => {
-          console.log(`🏓 [${requestId}] Pong recebido:`, data.toString());
         });
       });
     } catch (error) {
       console.error("❌ [WebSocket Bridge] Erro crítico no connect:", error);
-      console.error(
-        "❌ [WebSocket Bridge] Stack trace:",
-        error instanceof Error ? error.stack : "N/A"
-      );
       throw error;
     }
   }
 
   /**
-   * Desconecta do WebSocket
-   */
-  private disconnect(): void {
-    console.log("🔌 [WebSocket Bridge] Desconectando...");
-
-    this.clearIntervals();
-
-    if (this.ws) {
-      this.ws.close(1000, "Desconexão solicitada");
-      this.ws = null;
-    }
-
-    this._isConnected = false;
-    this._isAuthenticated = false;
-    this.emitStatusChange();
-  }
-
-  /**
-   * Autentica com a Nelogica
+   * Autentica com a Nelogica (conforme documentação oficial)
    */
   private authenticate(): void {
     const authMessage = {
-      name: "authenticate",
+      name: "authenticate", // Conforme documentação página 4
       request_id: this.generateRequestId(),
       msg: {
         token: this.token,
@@ -311,54 +205,157 @@ export class WebSocketBridge extends EventEmitter {
     };
 
     console.log("🔐 [WebSocket Bridge] Enviando autenticação...");
-    this.sendMessage(authMessage);
+    console.log(
+      "🔐 [WebSocket Bridge] Auth payload:",
+      JSON.stringify(authMessage, null, 2)
+    );
+
+    this.sendMessageSafe(authMessage);
   }
 
   /**
-   * Processa mensagens recebidas da Nelogica
+   * Processa mensagens recebidas da Nelogica (conforme documentação)
    */
   private handleMessage(data: string): void {
     try {
       const message = JSON.parse(data);
       console.log(`📨 [WebSocket Bridge] Mensagem recebida: ${message.name}`);
+      console.log(`📝 [WebSocket Bridge] Conteúdo completo:`, message);
 
-      // Tratar autenticação
-      if (message.name === "authentucated") {
-        console.log("✅ [WebSocket Bridge] Autenticado com sucesso!");
-        this._isAuthenticated = true;
-        this.emitStatusChange();
-        this.startHeartbeat();
-        this.subscribeToUpdates();
+      // CONFORME DOCUMENTAÇÃO PÁGINA 12: "authenticated"
+      if (message.name === "authenticated") {
+        console.log(`🔍 [WebSocket Bridge] Resposta de autenticação recebida`);
+        console.log(
+          `🔍 [WebSocket Bridge] Success status:`,
+          message.msg?.success
+        );
+
+        if (message.msg?.success === true) {
+          console.log(`✅ [WebSocket Bridge] 🎉 AUTENTICAÇÃO APROVADA!`);
+          this._isAuthenticated = true;
+          this.emitStatusChange();
+          this.startHeartbeat(); // Iniciar heartbeat de 60s
+          this.subscribeToUpdates(); // Subscrever com nomes corretos
+        } else {
+          console.error("❌ [WebSocket Bridge] 🚫 AUTENTICAÇÃO REJEITADA!");
+          console.error("❌ [WebSocket Bridge] Token usado:", this.token);
+          console.error("❌ [WebSocket Bridge] Resposta completa:", message);
+          console.error("❌ [WebSocket Bridge] 💡 Possíveis causas:");
+          console.error("   1. Token expirado ou inválido");
+          console.error("   2. Token para ambiente diferente (UAT vs PROD)");
+          console.error("   3. IP não autorizado");
+          console.error("   4. Formato do token incorreto");
+
+          // Emitir erro para o cliente
+          this.emit(
+            "error",
+            new Error(`Autenticação falhou: token inválido ou expirado`)
+          );
+        }
         return;
+      }
+
+      // Conforme documentação página 13: "result"
+      if (message.name === "result") {
+        console.log(`📋 [WebSocket Bridge] Resultado de comando:`, message);
+        if (!message.msg?.success) {
+          console.warn(
+            `⚠️ [WebSocket Bridge] Comando rejeitado: ${message.msg?.reason}`
+          );
+        }
       }
 
       // Retransmitir mensagem para clientes
       this.emit("nelogica-message", message);
     } catch (error) {
       console.error("❌ [WebSocket Bridge] Erro ao processar mensagem:", error);
+      console.error("❌ [WebSocket Bridge] Dados brutos:", data);
     }
   }
 
   /**
-   * Envia mensagem para a Nelogica
+   * Envia mensagem segura - evitando bufferUtil
    */
-  private sendMessage(message: NelogicaMessage): void {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+  private sendMessageSafe(message: NelogicaMessage): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.warn("⚠️  [WebSocket Bridge] WebSocket não disponível");
+      return;
+    }
+
+    try {
       const messageStr = JSON.stringify(message);
       console.log(`📤 [WebSocket Bridge] Enviando: ${message.name}`);
-      this.ws.send(messageStr);
-    } else {
-      console.warn(
-        "⚠️  [WebSocket Bridge] Tentativa de envio com WebSocket fechado"
-      );
-      console.warn(
-        `⚠️  [WebSocket Bridge] ReadyState atual: ${this.ws?.readyState} (OPEN=1)`
-      );
+
+      // Usar callback para detectar erros
+      this.ws.send(messageStr, (error) => {
+        if (error) {
+          console.error("❌ [WebSocket Bridge] Erro no envio:", error);
+          // Tentar fallback sem callback
+          try {
+            this.ws?.send(messageStr);
+          } catch (fallbackError) {
+            console.error(
+              "❌ [WebSocket Bridge] Fallback falhou:",
+              fallbackError
+            );
+          }
+        } else {
+          console.log("✅ [WebSocket Bridge] Mensagem enviada com sucesso");
+        }
+      });
+    } catch (error) {
+      console.error("❌ [WebSocket Bridge] Erro crítico no envio:", error);
     }
   }
 
+  private sendMessage(message: NelogicaMessage): void {
+    this.sendMessageSafe(message);
+  }
+
   /**
-   * Envia comando recebido do cliente para a Nelogica
+   * Subscreve para atualizações - NOMES CORRETOS da documentação
+   */
+  private subscribeToUpdates(): void {
+    // Conforme documentação páginas 8-11
+    const subscriptions = [
+      { name: "margin-changed", body: {} }, // Página 8
+      { name: "balance-changed", body: {} }, // Página 9
+      { name: "blocking-changed", body: {} }, // Página 9
+      { name: "risk-changed", body: {} }, // Página 10
+      { name: "position-changed", body: {} }, // Página 11
+    ];
+
+    subscriptions.forEach((sub) => {
+      const subscribeMessage = {
+        name: "subscribeMessage", // Conforme documentação
+        request_id: this.generateRequestId(),
+        msg: sub,
+      };
+      this.sendMessage(subscribeMessage);
+    });
+
+    console.log(
+      "📡 [WebSocket Bridge] Subscrito para atualizações (nomes corretos da documentação)"
+    );
+  }
+
+  /**
+   * KeepAlive - CONFORME DOCUMENTAÇÃO: 60 segundos
+   */
+  private startHeartbeat(): void {
+    this.heartbeatInterval = setInterval(() => {
+      const keepAlive = {
+        name: "keepAlive", // Conforme documentação página 4
+        request_id: this.generateRequestId(),
+        msg: {},
+      };
+      this.sendMessage(keepAlive);
+      console.log("💓 [WebSocket Bridge] KeepAlive enviado (60s)");
+    }, 60000); // 60 segundos conforme documentação
+  }
+
+  /**
+   * Envia comando para a Nelogica
    */
   public async sendCommand(command: any): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -373,12 +370,10 @@ export class WebSocketBridge extends EventEmitter {
         msg: command.msg || command,
       };
 
-      // Configurar timeout para resposta
       const timeout = setTimeout(() => {
         reject(new Error("Timeout aguardando resposta da Nelogica"));
       }, 10000);
 
-      // Listener temporário para a resposta
       const responseHandler = (response: any) => {
         if (response.request_id === message.request_id) {
           clearTimeout(timeout);
@@ -392,49 +387,21 @@ export class WebSocketBridge extends EventEmitter {
     });
   }
 
-  /**
-   * Subscreve para atualizações em tempo real
-   */
-  private subscribeToUpdates(): void {
-    const subscriptions = [
-      { name: "risk-update", body: {} },
-      { name: "position-update", body: {} },
-      { name: "balance-update", body: {} },
-      { name: "blocking-update", body: {} },
-    ];
-
-    subscriptions.forEach((sub) => {
-      const subscribeMessage = {
-        name: "subscribeMessage",
-        request_id: this.generateRequestId(),
-        msg: sub,
-      };
-      this.sendMessage(subscribeMessage);
-    });
-
-    console.log("📡 [WebSocket Bridge] Subscrito para atualizações");
+  private disconnect(): void {
+    console.log("🔌 [WebSocket Bridge] Desconectando...");
+    this.clearIntervals();
+    if (this.ws) {
+      this.ws.close(1000, "Desconexão solicitada");
+      this.ws = null;
+    }
+    this._isConnected = false;
+    this._isAuthenticated = false;
+    this.emitStatusChange();
   }
 
-  /**
-   * Inicia heartbeat para manter conexão
-   */
-  private startHeartbeat(): void {
-    this.heartbeatInterval = setInterval(() => {
-      const keepAlive = {
-        name: "keepAlive",
-        request_id: this.generateRequestId(),
-        msg: {},
-      };
-      this.sendMessage(keepAlive);
-    }, 30000); // 30 segundos
-  }
-
-  /**
-   * Agenda reconexão automática
-   */
   private scheduleReconnect(): void {
     this.reconnectAttempts++;
-    const delay = Math.min(5000 * this.reconnectAttempts, 30000); // Max 30s
+    const delay = Math.min(5000 * this.reconnectAttempts, 30000);
 
     console.log(
       `🔄 [WebSocket Bridge] Reconectando em ${delay}ms (tentativa ${this.reconnectAttempts})`
@@ -447,9 +414,6 @@ export class WebSocketBridge extends EventEmitter {
     }, delay);
   }
 
-  /**
-   * Limpa intervalos
-   */
   private clearIntervals(): void {
     if (this.reconnectInterval) {
       clearTimeout(this.reconnectInterval);
@@ -461,9 +425,6 @@ export class WebSocketBridge extends EventEmitter {
     }
   }
 
-  /**
-   * Emite mudança de status para clientes
-   */
   private emitStatusChange(): void {
     const status = {
       connected: this._isConnected,
@@ -471,18 +432,22 @@ export class WebSocketBridge extends EventEmitter {
       reconnectAttempts: this.reconnectAttempts,
       lastHeartbeat: new Date().toISOString(),
     };
-
     this.emit("status-change", status);
   }
 
-  /**
-   * Gera ID único para requisições
-   */
   private generateRequestId(): string {
-    return `bridge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Gerar UUID v4 conforme documentação Nelogica (36 caracteres)
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+      /[xy]/g,
+      function (c) {
+        const r = (Math.random() * 16) | 0;
+        const v = c == "x" ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      }
+    );
   }
 
-  // Métodos públicos para verificar status
+  // Métodos públicos
   public isConnected(): boolean {
     return this._isConnected;
   }
@@ -491,9 +456,6 @@ export class WebSocketBridge extends EventEmitter {
     return this._isAuthenticated;
   }
 
-  /**
-   * Getter para status de conexão (alternativa aos métodos)
-   */
   public get connectionStatus() {
     return {
       connected: this._isConnected,
