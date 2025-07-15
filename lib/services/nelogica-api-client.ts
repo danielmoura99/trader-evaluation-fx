@@ -3,6 +3,14 @@
 import axios, { AxiosInstance } from "axios";
 import { ProxyService } from "./proxy-service";
 
+declare module "axios" {
+  export interface AxiosRequestConfig {
+    metadata?: {
+      requestId: string;
+      startTime: number;
+    };
+  }
+}
 /**
  * Interfaces de resposta da API
  */
@@ -266,6 +274,7 @@ export class NelogicaApiClient {
 
   /**
    * Configura interceptors para logs detalhados
+   * VERSÃO CORRIGIDA - NÃO sobrescreve o payload
    */
   private setupInterceptors(): void {
     // Request interceptor
@@ -280,6 +289,9 @@ export class NelogicaApiClient {
         );
         console.log(`📋 [${requestId}] Headers:`, config.headers);
 
+        // Log do payload ORIGINAL (antes de qualquer modificação)
+        console.log(`📦 [${requestId}] Payload original:`, config.data);
+
         // Log do proxy se configurado
         if (config.proxy) {
           console.log(
@@ -292,8 +304,14 @@ export class NelogicaApiClient {
           console.log(`🔄 [${requestId}] Proxy: Conexão direta`);
         }
 
-        // Adicionar ID da requisição para tracking
-        config.data = { requestId, startTime: Date.now() };
+        // CORREÇÃO: Adicionar metadata SEM sobrescrever o payload
+        // Usar um campo separado para tracking
+        config.metadata = {
+          requestId,
+          startTime: Date.now(),
+        };
+
+        // NÃO MODIFICAR config.data - manter o payload original intacto
 
         return config;
       },
@@ -306,8 +324,9 @@ export class NelogicaApiClient {
     // Response interceptor
     this.apiClient.interceptors.response.use(
       (response) => {
-        const requestId = response.config.data?.requestId || "unknown";
-        const startTime = response.config.data?.startTime || Date.now();
+        // Pegar metadata do campo correto
+        const requestId = response.config.metadata?.requestId || "unknown";
+        const startTime = response.config.metadata?.startTime || Date.now();
         const duration = Date.now() - startTime;
 
         console.log(`📨 [${requestId}] ===== RESPOSTA RECEBIDA =====`);
@@ -332,6 +351,7 @@ export class NelogicaApiClient {
         return response;
       },
       (error) => {
+        // Pegar metadata do campo correto
         const requestId = error.config?.metadata?.requestId || "unknown";
         const startTime = error.config?.metadata?.startTime || Date.now();
         const duration = Date.now() - startTime;

@@ -412,7 +412,7 @@ export async function testNelogicaListSubscriptions() {
     // Obtém todas as assinaturas
     const response = await apiClient.listSubscriptions({
       pageNumber: 1,
-      pageSize: 100, // Aumentamos o tamanho da página para garantir que pegamos todas as assinaturas
+      pageSize: 1000, // Aumentamos o tamanho da página para garantir que pegamos todas as assinaturas
     });
 
     if (!response.isSuccess) {

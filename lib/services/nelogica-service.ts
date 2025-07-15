@@ -518,10 +518,14 @@ export class NelogicaService {
   }
 
   /**
-   * Lista assinaturas com logs detalhados
+   * Lista assinaturas com logs detalhados e filtro por planId
    */
   public async listSubscriptions(): Promise<any[]> {
     const requestId = `svc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Constante com o planId específico da nossa empresa
+    const TARGET_PLAN_ID =
+      process.env.NELOGICA_PLAN_ID || "c0dc847f-8fe6-4a31-ab14-62c2977ed4a0";
 
     try {
       console.log(
@@ -530,6 +534,7 @@ export class NelogicaService {
 
       // Log das configurações
       console.log(`⚙️  [${requestId}] Environment ID: ${this.environmentId}`);
+      console.log(`🎯 [${requestId}] Target Plan ID: ${TARGET_PLAN_ID}`);
       console.log(
         `🌐 [${requestId}] API URL: ${this.apiClient["baseUrl"] || "N/A"}`
       );
@@ -543,7 +548,7 @@ export class NelogicaService {
       const response = await this.withRetry(() =>
         this.apiClient.listSubscriptions({
           pageNumber: 1,
-          pageSize: 100,
+          pageSize: 1000,
         })
       );
 
@@ -562,107 +567,46 @@ export class NelogicaService {
         throw new Error(`API Nelogica retornou erro: ${response.message}`);
       }
 
-      const subscriptions = response.data?.subscriptions || [];
+      const allSubscriptions = response.data?.subscriptions || [];
       console.log(
-        `📋 [${requestId}] Total de assinaturas retornadas: ${subscriptions.length}`
+        `📋 [${requestId}] Total de assinaturas retornadas: ${allSubscriptions.length}`
       );
 
-      if (subscriptions.length > 0) {
-        console.log(`📄 [${requestId}] Estrutura da primeira assinatura:`, {
-          subscriptionId: subscriptions[0].subscriptionId,
-          licenseId: subscriptions[0].licenseId,
-          customerId: subscriptions[0].customerId,
-          planId: subscriptions[0].planId,
-          createdAt: subscriptions[0].createdAt,
-          accounts: Array.isArray(subscriptions[0].accounts)
-            ? subscriptions[0].accounts.length
-            : "N/A",
-        });
+      // FILTRAR apenas as assinaturas do nosso planId
+      const filteredSubscriptions = allSubscriptions.filter(
+        (subscription: any) => subscription.planId === TARGET_PLAN_ID
+      );
 
-        // Log das propriedades disponíveis
+      console.log(
+        `🎯 [${requestId}] Assinaturas filtradas por planId: ${filteredSubscriptions.length} de ${allSubscriptions.length} total`
+      );
+
+      if (filteredSubscriptions.length > 0) {
         console.log(
-          `🔍 [${requestId}] Propriedades disponíveis na primeira assinatura:`,
-          Object.keys(subscriptions[0])
+          `📄 [${requestId}] Estrutura da primeira assinatura filtrada:`,
+          {
+            subscriptionId: filteredSubscriptions[0].subscriptionId,
+            licenseId: filteredSubscriptions[0].licenseId,
+            customerId: filteredSubscriptions[0].customerId,
+            planId: filteredSubscriptions[0].planId,
+            createdAt: filteredSubscriptions[0].createdAt,
+            accounts: Array.isArray(filteredSubscriptions[0].accounts)
+              ? filteredSubscriptions[0].accounts.length
+              : "N/A",
+          }
         );
       }
 
-      // Log da paginação se disponível
-      if (response.data?.parameters?.pagination) {
-        const pagination = response.data.parameters.pagination;
-        console.log(`📄 [${requestId}] Informações de paginação:`, {
-          pageNumber: pagination.pageNumber,
-          pageSize: pagination.pageSize,
-          totalRecords: pagination.totalRecords,
-          totalPages: pagination.totalPages,
-        });
-      }
-
-      logger.info(
-        `[${requestId}] ${subscriptions.length} assinaturas obtidas da API Nelogica`
+      console.log(
+        `✅ [${requestId}] Listagem completada com sucesso - retornando ${filteredSubscriptions.length} assinaturas filtradas`
       );
 
-      console.log(`✅ [${requestId}] ===== FIM NELOGICA SERVICE =====`);
-      return subscriptions;
+      return filteredSubscriptions;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-
-      console.error(`❌ [${requestId}] ===== ERRO NO NELOGICA SERVICE =====`);
-      console.error(
-        `❌ [${requestId}] Tipo do erro:`,
-        error?.constructor?.name || "Unknown"
-      );
-      console.error(`❌ [${requestId}] Mensagem:`, errorMsg);
-
-      if (error instanceof Error) {
-        console.error(`❌ [${requestId}] Stack trace:`, error.stack);
-      }
-
-      // Log detalhado para erros de rede
-      if (error && typeof error === "object") {
-        const errorObj = error as any;
-        if (errorObj.response) {
-          console.error(
-            `🌐 [${requestId}] HTTP Status:`,
-            errorObj.response.status
-          );
-          console.error(
-            `🌐 [${requestId}] HTTP Status Text:`,
-            errorObj.response.statusText
-          );
-          console.error(
-            `🌐 [${requestId}] Response Headers:`,
-            errorObj.response.headers
-          );
-          console.error(
-            `🌐 [${requestId}] Response Data:`,
-            errorObj.response.data
-          );
-        }
-        if (errorObj.config) {
-          console.error(`📡 [${requestId}] Request URL:`, errorObj.config.url);
-          console.error(
-            `📡 [${requestId}] Request Method:`,
-            errorObj.config.method
-          );
-          console.error(
-            `📡 [${requestId}] Request Headers:`,
-            errorObj.config.headers
-          );
-          console.error(
-            `📡 [${requestId}] Request Data:`,
-            errorObj.config.data
-          );
-        }
-      }
-
-      console.error(`❌ [${requestId}] ===== FIM DO ERRO SERVICE =====`);
-
-      logger.error(
-        `[${requestId}] Erro no NelogicaService.listSubscriptions: ${errorMsg}`
-      );
-      throw new Error(
-        `Falha ao obter assinaturas do serviço Nelogica: ${errorMsg}`
-      );
+      console.error(`❌ [${requestId}] Erro ao listar assinaturas:`, errorMsg);
+      logger.error(`Erro ao listar assinaturas: ${errorMsg}`);
+      throw error;
     }
   }
 
