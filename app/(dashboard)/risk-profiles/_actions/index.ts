@@ -4,8 +4,17 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { NelogicaService } from "@/lib/services/nelogica-service";
+import { NelogicaApiClient } from "@/lib/services/nelogica-api-client";
 import { logger } from "@/lib/logger";
+
+// Configurações da API Nelogica
+const NELOGICA_API_URL =
+  process.env.NELOGICA_API_URL || "https://api-broker4-v2.nelogica.com.br";
+const NELOGICA_USERNAME =
+  process.env.NELOGICA_USERNAME || "tradersHouse.hml@nelogica";
+const NELOGICA_PASSWORD =
+  process.env.NELOGICA_PASSWORD || "OJOMy4miz63YLFwOM27ZGTO5n";
+const NELOGICA_ENVIRONMENT_ID = process.env.NELOGICA_ENVIRONMENT_ID || "1";
 
 // Interface para o perfil de risco
 export interface RiskProfile {
@@ -57,7 +66,6 @@ export async function getRiskProfiles() {
       gainRule: profile.gainRule,
       planMappings: profile.planMappings.map((pm) => pm.planName),
     }));
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     logger.error(`Erro ao obter perfis de risco: ${error.message}`);
     throw new Error("Falha ao obter perfis de risco");
@@ -106,21 +114,38 @@ export async function createRiskProfile(profile: RiskProfile) {
   try {
     logger.info(`Criando perfil de risco: ${profile.name}`);
 
+    // Instanciar o cliente da API Nelogica
+    const nelogicaClient = new NelogicaApiClient(
+      NELOGICA_API_URL,
+      NELOGICA_USERNAME,
+      NELOGICA_PASSWORD
+    );
+
     // Criar o perfil na Nelogica
-    const nelogicaService = new NelogicaService();
-    const nelogicaProfileId = await nelogicaService.createRiskProfile({
-      initialBalance: profile.initialBalance,
-      trailing: profile.trailing,
-      stopOutRule: profile.stopOutRule,
-      leverage: profile.leverage,
-      commissionsEnabled: profile.commissionsEnabled,
-      enableContractExposure: profile.enableContractExposure,
-      contractExposure: profile.contractExposure,
-      enableLoss: profile.enableLoss,
-      lossRule: profile.lossRule,
-      enableGain: profile.enableGain,
-      gainRule: profile.gainRule,
-    });
+    const nelogicaResponse = await nelogicaClient.createRiskProfile(
+      NELOGICA_ENVIRONMENT_ID,
+      {
+        initialBalance: profile.initialBalance,
+        trailing: profile.trailing,
+        stopOutRule: profile.stopOutRule,
+        leverage: profile.leverage,
+        commissionsEnabled: profile.commissionsEnabled,
+        enableContractExposure: profile.enableContractExposure,
+        contractExposure: profile.contractExposure,
+        enableLoss: profile.enableLoss,
+        lossRule: profile.lossRule,
+        enableGain: profile.enableGain,
+        gainRule: profile.gainRule,
+      }
+    );
+
+    if (!nelogicaResponse.isSuccess) {
+      throw new Error(
+        `Falha ao criar perfil na Nelogica: ${nelogicaResponse.message}`
+      );
+    }
+
+    const nelogicaProfileId = nelogicaResponse.data.profileId;
 
     // Salvar o perfil no banco de dados local
     const dbProfile = await prisma.riskProfile.create({
@@ -176,21 +201,37 @@ export async function updateRiskProfile(id: string, profile: RiskProfile) {
       throw new Error("Perfil de risco não encontrado");
     }
 
+    // Instanciar o cliente da API Nelogica
+    const nelogicaClient = new NelogicaApiClient(
+      NELOGICA_API_URL,
+      NELOGICA_USERNAME,
+      NELOGICA_PASSWORD
+    );
+
     // Atualizar na Nelogica
-    const nelogicaService = new NelogicaService();
-    await nelogicaService.updateRiskProfile(currentProfile.nelogicaProfileId, {
-      initialBalance: profile.initialBalance,
-      trailing: profile.trailing,
-      stopOutRule: profile.stopOutRule,
-      leverage: profile.leverage,
-      commissionsEnabled: profile.commissionsEnabled,
-      enableContractExposure: profile.enableContractExposure,
-      contractExposure: profile.contractExposure,
-      enableLoss: profile.enableLoss,
-      lossRule: profile.lossRule,
-      enableGain: profile.enableGain,
-      gainRule: profile.gainRule,
-    });
+    const nelogicaResponse = await nelogicaClient.updateRiskProfile(
+      NELOGICA_ENVIRONMENT_ID,
+      {
+        profileId: currentProfile.nelogicaProfileId,
+        initialBalance: profile.initialBalance,
+        trailing: profile.trailing,
+        stopOutRule: profile.stopOutRule,
+        leverage: profile.leverage,
+        commissionsEnabled: profile.commissionsEnabled,
+        enableContractExposure: profile.enableContractExposure,
+        contractExposure: profile.contractExposure,
+        enableLoss: profile.enableLoss,
+        lossRule: profile.lossRule,
+        enableGain: profile.enableGain,
+        gainRule: profile.gainRule,
+      }
+    );
+
+    if (!nelogicaResponse.isSuccess) {
+      throw new Error(
+        `Falha ao atualizar perfil na Nelogica: ${nelogicaResponse.message}`
+      );
+    }
 
     // Atualizar os mapeamentos de planos
     // Primeiro removemos todos os mapeamentos existentes
@@ -272,7 +313,8 @@ export async function deleteRiskProfile(id: string) {
       where: { id },
     });
 
-    // Não excluímos da Nelogica, pois pode estar sendo usado em outra integração
+    // NOTA: Não excluímos da Nelogica, pois pode estar sendo usado em outra integração
+    // Se necessário, pode ser implementado usando deleteRiskProfile da API (se disponível)
 
     logger.info(`Perfil de risco excluído com sucesso: ${id}`);
     revalidatePath("/risk-profiles");
@@ -316,5 +358,44 @@ export async function getAvailablePlans() {
   } catch (error: any) {
     logger.error(`Erro ao obter planos disponíveis: ${error.message}`);
     throw new Error("Falha ao obter planos disponíveis");
+  }
+}
+
+/**
+ * Lista perfis de risco da Nelogica (opcional - para sincronização)
+ */
+export async function listNelogicaRiskProfiles() {
+  try {
+    logger.info("Listando perfis de risco da Nelogica");
+
+    // Instanciar o cliente da API Nelogica
+    const nelogicaClient = new NelogicaApiClient(
+      NELOGICA_API_URL,
+      NELOGICA_USERNAME,
+      NELOGICA_PASSWORD
+    );
+
+    // Listar perfis de risco da Nelogica
+    const response = await nelogicaClient.listRiskProfiles(
+      NELOGICA_ENVIRONMENT_ID,
+      {
+        pageNumber: 1,
+        pageSize: 100,
+      }
+    );
+
+    if (!response.isSuccess) {
+      throw new Error(
+        `Falha ao listar perfis da Nelogica: ${response.message}`
+      );
+    }
+
+    logger.info(
+      `${response.data.riskProfiles.length} perfis encontrados na Nelogica`
+    );
+    return response.data.riskProfiles;
+  } catch (error: any) {
+    logger.error(`Erro ao listar perfis da Nelogica: ${error.message}`);
+    throw new Error("Falha ao listar perfis de risco da Nelogica");
   }
 }

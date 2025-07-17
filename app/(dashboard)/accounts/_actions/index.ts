@@ -5,8 +5,16 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { NelogicaService } from "@/lib/services/nelogica-service";
+import { NelogicaApiClient } from "@/lib/services/nelogica-api-client";
 import { logger } from "@/lib/logger";
+
+// Configurações da API Nelogica
+const NELOGICA_API_URL =
+  process.env.NELOGICA_API_URL || "https://api-broker4-v2.nelogica.com.br";
+const NELOGICA_USERNAME =
+  process.env.NELOGICA_USERNAME || "tradersHouse.hml@nelogica";
+const NELOGICA_PASSWORD =
+  process.env.NELOGICA_PASSWORD || "OJOMy4miz63YLFwOM27ZGTO5n";
 
 /**
  * Interface para accounts
@@ -37,16 +45,26 @@ export async function getAccounts() {
   try {
     logger.info("Buscando contas na Nelogica");
 
-    // Instancia o serviço Nelogica
-    const nelogicaService = new NelogicaService();
+    // Instancia o cliente da API Nelogica
+    const nelogicaClient = new NelogicaApiClient(
+      NELOGICA_API_URL,
+      NELOGICA_USERNAME,
+      NELOGICA_PASSWORD
+    );
 
     // Busca as assinaturas na API da Nelogica (que contêm as contas)
-    const subscriptions = await nelogicaService.listSubscriptions();
+    const subscriptionsResponse = await nelogicaClient.listSubscriptions();
+
+    if (!subscriptionsResponse.isSuccess) {
+      throw new Error(
+        `Falha ao obter assinaturas: ${subscriptionsResponse.message}`
+      );
+    }
 
     // Extrair todas as contas de todas as assinaturas
     const accounts: NelogicaAccount[] = [];
 
-    for (const subscription of subscriptions) {
+    for (const subscription of subscriptionsResponse.data.subscriptions) {
       if (!subscription.accounts || !Array.isArray(subscription.accounts)) {
         continue;
       }
@@ -58,19 +76,10 @@ export async function getAccounts() {
 
       // Adiciona cada conta ao array de contas
       for (const account of subscription.accounts) {
-        // Verificar status de bloqueio da conta
-        let isBlocked = false;
-        try {
-          // Tenta obter o status de bloqueio específico da conta
-          isBlocked = await nelogicaService.isAccountBlocked(
-            subscription.licenseId,
-            account.account
-          );
-        } catch (error) {
-          logger.warn(
-            `Não foi possível verificar status de bloqueio da conta ${account.account}`
-          );
-        }
+        // A API da Nelogica não fornece um endpoint direto para verificar se uma conta está bloqueada
+        // Assumimos que não está bloqueada por padrão
+        // Se necessário, o status será atualizado através das operações de block/unblock
+        const isBlocked = false;
 
         accounts.push({
           account: account.account,
@@ -109,11 +118,19 @@ export async function blockAccount(licenseId: string, account: string) {
   try {
     logger.info(`Bloqueando conta ${account}`);
 
-    // Instancia o serviço Nelogica
-    const nelogicaService = new NelogicaService();
+    // Instancia o cliente da API Nelogica
+    const nelogicaClient = new NelogicaApiClient(
+      NELOGICA_API_URL,
+      NELOGICA_USERNAME,
+      NELOGICA_PASSWORD
+    );
 
     // Bloqueia a conta na Nelogica
-    await nelogicaService.blockAccount(licenseId, account);
+    const response = await nelogicaClient.blockAccount(licenseId, account);
+
+    if (!response.isSuccess) {
+      throw new Error(`Falha ao bloquear conta: ${response.message}`);
+    }
 
     // Atualiza o registro do cliente local se necessário
     const client = await prisma.client.findFirst({
@@ -123,6 +140,7 @@ export async function blockAccount(licenseId: string, account: string) {
     if (client) {
       // Opcionalmente podemos atualizar algum status no cliente local
       // dependendo das necessidades do projeto
+      logger.info(`Cliente encontrado para a conta ${account}: ${client.name}`);
     }
 
     logger.info(`Conta ${account} bloqueada com sucesso`);
@@ -143,11 +161,19 @@ export async function unblockAccount(licenseId: string, account: string) {
   try {
     logger.info(`Desbloqueando conta ${account}`);
 
-    // Instancia o serviço Nelogica
-    const nelogicaService = new NelogicaService();
+    // Instancia o cliente da API Nelogica
+    const nelogicaClient = new NelogicaApiClient(
+      NELOGICA_API_URL,
+      NELOGICA_USERNAME,
+      NELOGICA_PASSWORD
+    );
 
     // Desbloqueia a conta na Nelogica
-    await nelogicaService.unblockAccount(licenseId, account);
+    const response = await nelogicaClient.unblockAccount(licenseId, account);
+
+    if (!response.isSuccess) {
+      throw new Error(`Falha ao desbloquear conta: ${response.message}`);
+    }
 
     // Atualiza o registro do cliente local se necessário
     const client = await prisma.client.findFirst({
@@ -157,6 +183,7 @@ export async function unblockAccount(licenseId: string, account: string) {
     if (client) {
       // Opcionalmente podemos atualizar algum status no cliente local
       // dependendo das necessidades do projeto
+      logger.info(`Cliente encontrado para a conta ${account}: ${client.name}`);
     }
 
     logger.info(`Conta ${account} desbloqueada com sucesso`);
@@ -177,11 +204,19 @@ export async function removeAccount(licenseId: string, account: string) {
   try {
     logger.info(`Removendo conta ${account}`);
 
-    // Instancia o serviço Nelogica
-    const nelogicaService = new NelogicaService();
+    // Instancia o cliente da API Nelogica
+    const nelogicaClient = new NelogicaApiClient(
+      NELOGICA_API_URL,
+      NELOGICA_USERNAME,
+      NELOGICA_PASSWORD
+    );
 
     // Remove a conta na Nelogica
-    await nelogicaService.removeAccount(licenseId, account);
+    const response = await nelogicaClient.removeAccount(licenseId, account);
+
+    if (!response.isSuccess) {
+      throw new Error(`Falha ao remover conta: ${response.message}`);
+    }
 
     // Atualiza o registro do cliente local se necessário
     const client = await prisma.client.findFirst({
@@ -195,6 +230,7 @@ export async function removeAccount(licenseId: string, account: string) {
           nelogicaAccount: null,
         },
       });
+      logger.info(`Registro local do cliente ${client.name} atualizado`);
     }
 
     logger.info(`Conta ${account} removida com sucesso`);
@@ -209,85 +245,51 @@ export async function removeAccount(licenseId: string, account: string) {
 }
 
 /**
- * Obtém detalhes da conta
+ * Define o perfil de risco para uma conta
  */
-export async function getAccountDetails(licenseId: string, account: string) {
+export async function setAccountRiskProfile(
+  licenseId: string,
+  account: string,
+  profileId: string,
+  accountType: number = 0
+) {
   try {
-    logger.info(`Obtendo detalhes da conta ${account}`);
-
-    // Instancia o serviço Nelogica
-    const nelogicaService = new NelogicaService();
-
-    // Lista assinaturas para encontrar a assinatura que contém a conta
-    const subscriptions = await nelogicaService.listSubscriptions();
-
-    // Encontra a assinatura correspondente
-    const subscription = subscriptions.find(
-      (sub) =>
-        sub.licenseId === licenseId &&
-        sub.accounts?.some((acc: any) => acc.account === account)
+    logger.info(
+      `Configurando perfil de risco ${profileId} para conta ${account}`
     );
 
-    if (!subscription) {
-      throw new Error(`Conta ${account} não encontrada`);
-    }
-
-    // Encontrar a conta específica
-    const accountData = subscription.accounts?.find(
-      (acc: any) => acc.account === account
+    // Instancia o cliente da API Nelogica
+    const nelogicaClient = new NelogicaApiClient(
+      NELOGICA_API_URL,
+      NELOGICA_USERNAME,
+      NELOGICA_PASSWORD
     );
 
-    if (!accountData) {
-      throw new Error(`Conta ${account} não encontrada`);
-    }
-
-    // Verificar se a conta está bloqueada
-    let isBlocked = false;
-    try {
-      // Isso é apenas um placeholder - você precisará implementar a lógica real
-      // para verificar se a conta está bloqueada com base na sua API
-      // Por exemplo, pode ser uma chamada separada para verificar o status
-      isBlocked = await nelogicaService.isAccountBlocked(licenseId, account);
-    } catch (error) {
-      logger.warn(`Não foi possível verificar status de bloqueio: ${error}`);
-    }
-
-    // Busca o cliente correspondente no banco local
-    const client = await prisma.client.findFirst({
-      where: {
-        OR: [{ nelogicaAccount: account }, { nelogicaLicenseId: licenseId }],
-      },
-    });
-
-    // Montar objeto de retorno
-    const result = {
-      ...accountData,
+    // Define o perfil de risco na Nelogica
+    const response = await nelogicaClient.setAccountRisk(
       licenseId,
-      subscriptionId: subscription.subscriptionId,
-      customerId: subscription.customerId,
-      isBlocked: isBlocked,
-      clientDetails: client
-        ? {
-            id: client.id,
-            name: client.name,
-            email: client.email,
-            cpf: client.cpf,
-            phone: client.phone,
-            plan: client.plan,
-            traderStatus: client.traderStatus,
-            startDate: client.startDate,
-            endDate: client.endDate,
-          }
-        : null,
-    };
+      account,
+      profileId,
+      accountType
+    );
 
-    logger.info(`Detalhes da conta ${account} obtidos com sucesso`);
-    return result;
+    if (!response.isSuccess) {
+      throw new Error(
+        `Falha ao configurar perfil de risco: ${response.message}`
+      );
+    }
+
+    logger.info(
+      `Perfil de risco ${profileId} configurado com sucesso para conta ${account}`
+    );
+    revalidatePath("/accounts");
+
+    return { success: true, profileId, accountType };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    logger.error(`Erro ao obter detalhes da conta: ${errorMsg}`);
+    logger.error(`Erro ao configurar perfil de risco: ${errorMsg}`);
     throw new Error(
-      `Falha ao obter detalhes da conta na Nelogica: ${errorMsg}`
+      `Falha ao configurar perfil de risco na Nelogica: ${errorMsg}`
     );
   }
 }

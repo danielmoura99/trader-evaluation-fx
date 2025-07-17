@@ -273,126 +273,50 @@ export class NelogicaApiClient {
   }
 
   /**
-   * Configura interceptors para logs detalhados
-   * VERSÃO CORRIGIDA - NÃO sobrescreve o payload
+   * Configura interceptadores para logging limpo
    */
   private setupInterceptors(): void {
-    // Request interceptor
+    // Interceptor de requisição - apenas log essencial
     this.apiClient.interceptors.request.use(
       (config) => {
-        const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-        console.log(`📡 [${requestId}] ===== REQUISIÇÃO SAINDO =====`);
-        console.log(`🔗 [${requestId}] URL: ${config.baseURL}${config.url}`);
         console.log(
-          `📋 [${requestId}] Método: ${config.method?.toUpperCase()}`
+          `[Nelogica API] ${config.method?.toUpperCase()} ${config.url}`
         );
-        console.log(`📋 [${requestId}] Headers:`, config.headers);
-
-        // Log do payload ORIGINAL (antes de qualquer modificação)
-        console.log(`📦 [${requestId}] Payload original:`, config.data);
-
-        // Log do proxy se configurado
-        if (config.proxy) {
-          console.log(
-            `🔄 [${requestId}] Proxy: ${config.proxy.host}:${config.proxy.port}`
-          );
-          console.log(
-            `👤 [${requestId}] Proxy Auth: ${config.proxy.auth?.username || "N/A"}`
-          );
-        } else {
-          console.log(`🔄 [${requestId}] Proxy: Conexão direta`);
-        }
-
-        // CORREÇÃO: Adicionar metadata SEM sobrescrever o payload
-        // Usar um campo separado para tracking
-        config.metadata = {
-          requestId,
-          startTime: Date.now(),
-        };
-
-        // NÃO MODIFICAR config.data - manter o payload original intacto
-
         return config;
       },
       (error) => {
-        console.error("❌ [Request Interceptor] Erro na requisição:", error);
+        console.error(
+          "[Nelogica API] Erro na configuração da requisição:",
+          error.message
+        );
         return Promise.reject(error);
       }
     );
 
-    // Response interceptor
+    // Interceptor de resposta - log limpo
     this.apiClient.interceptors.response.use(
       (response) => {
-        // Pegar metadata do campo correto
-        const requestId = response.config.metadata?.requestId || "unknown";
-        const startTime = response.config.metadata?.startTime || Date.now();
-        const duration = Date.now() - startTime;
-
-        console.log(`📨 [${requestId}] ===== RESPOSTA RECEBIDA =====`);
-        console.log(`⏱️  [${requestId}] Duração: ${duration}ms`);
-        console.log(
-          `📊 [${requestId}] Status: ${response.status} ${response.statusText}`
-        );
-        console.log(
-          `📄 [${requestId}] Tamanho: ${JSON.stringify(response.data).length} bytes`
-        );
-
-        // Log específico para sucesso
-        if (response.data?.isSuccess) {
-          console.log(`✅ [${requestId}] API retornou sucesso`);
-        } else if (response.data?.isSuccess === false) {
-          console.log(
-            `⚠️  [${requestId}] API retornou erro: ${response.data.message}`
+        if (response.data?.isSuccess === false) {
+          console.warn(
+            `[Nelogica API] API retornou erro: ${response.data.message}`
           );
         }
-
-        console.log(`📨 [${requestId}] ===== FIM RESPOSTA =====`);
         return response;
       },
       (error) => {
-        // Pegar metadata do campo correto
-        const requestId = error.config?.metadata?.requestId || "unknown";
-        const startTime = error.config?.metadata?.startTime || Date.now();
-        const duration = Date.now() - startTime;
-
-        console.error(`❌ [${requestId}] ===== ERRO NA RESPOSTA =====`);
-        console.error(`⏱️  [${requestId}] Duração até erro: ${duration}ms`);
-
         if (error.response) {
           console.error(
-            `📊 [${requestId}] Status HTTP: ${error.response.status}`
-          );
-          console.error(
-            `📄 [${requestId}] Dados do erro:`,
-            error.response.data
-          );
-          console.error(
-            `📋 [${requestId}] Headers da resposta:`,
-            error.response.headers
+            `[Nelogica API] Erro HTTP ${error.response.status}: ${error.response.statusText}`
           );
         } else if (error.request) {
-          console.error(`📡 [${requestId}] Requisição feita mas sem resposta`);
-          console.error(`🌐 [${requestId}] Detalhes da requisição:`, {
-            url: error.config?.url,
-            method: error.config?.method,
-            proxy: error.config?.proxy
-              ? `${error.config.proxy.host}:${error.config.proxy.port}`
-              : "direto",
-          });
+          console.error("[Nelogica API] Sem resposta do servidor");
         } else {
-          console.error(
-            `⚙️  [${requestId}] Erro na configuração:`,
-            error.message
-          );
+          console.error(`[Nelogica API] Erro na requisição: ${error.message}`);
         }
-
-        console.error(`❌ [${requestId}] ===== FIM ERRO =====`);
         return Promise.reject(error);
       }
     );
   }
-
   /**
    * Testa conectividade básica com logs aprimorados
    */
@@ -450,100 +374,51 @@ export class NelogicaApiClient {
   }
 
   /**
-   * Autentica na API da Nelogica e obtém um token
+   * Realiza login na API da Nelogica
    */
   public async login(): Promise<void> {
-    // Evita múltiplas tentativas de login simultâneas
     if (this.isLoggingIn) {
-      console.log("[Nelogica API] Login já está em andamento, aguardando...");
-
-      // Espera até que o login em andamento termine
+      console.log("[Nelogica API] Login já em andamento, aguardando");
+      // Aguarda o login em andamento
       while (this.isLoggingIn) {
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
-
-      // Se já temos um token válido após o login anterior, retornamos
-      if (this.isTokenValid()) {
-        return;
-      }
-    }
-
-    // Se o token já é válido, não precisamos fazer login novamente
-    if (this.isTokenValid()) {
       return;
     }
 
-    const startTime = Date.now();
+    this.isLoggingIn = true;
 
     try {
-      const startTime = Date.now();
-      this.isLoggingIn = true;
-      console.log("[Nelogica API] Iniciando autenticação...");
-      // Log detalhado da requisição
-      console.log(
-        `[Nelogica API] URL completa: ${this.baseUrl}/api/v2/auth/login`
-      );
-      console.log(
-        `[Nelogica API] Payload de autenticação: { username: "${this.username}", password: "${this.password}" }`
-      );
+      console.log("[Nelogica API] Realizando autenticação");
 
       const response = await this.apiClient.post<NelogicaAuthResponse>(
-        "/api/v2/auth/login",
+        "api/v2/auth/login",
         {
           username: this.username,
           password: this.password,
         }
       );
 
-      const elapsedTime = Date.now() - startTime;
-      console.log(`[Nelogica API] Resposta recebida em ${elapsedTime}ms`);
-
-      if (response.data.isSuccess) {
+      if (response.data.isSuccess && response.data.data?.token) {
         this.token = response.data.data.token;
-        this.tokenExpiry = new Date(response.data.data.expiresAt);
-        console.log(
-          "[Nelogica API] Autenticação bem-sucedida, token válido até:",
-          this.tokenExpiry
-        );
+
+        // Calcular expiração do token (assumindo 1 hora se não especificado)
+        const expiresInMs = 60 * 60 * 1000; // 1 hora
+        this.tokenExpiry = new Date(Date.now() + expiresInMs);
+
+        console.log("[Nelogica API] Autenticação realizada com sucesso");
       } else {
-        console.error(
-          `[Nelogica API] Falha na autenticação: ${response.data.message}`
-        );
-        throw new Error(`Falha na autenticação: ${response.data.message}`);
+        throw new Error(response.data.message || "Falha na autenticação");
       }
     } catch (error: any) {
-      const elapsedTime = Date.now() - startTime;
       console.error(
-        `[Nelogica API] Erro de autenticação após ${elapsedTime}ms:`,
-        error.message
+        "[Nelogica API] Erro na autenticação:",
+        error.response?.data?.message || error.message
       );
 
-      // Log detalhado do erro
-      if (error.isAxiosError) {
-        console.error("[Nelogica API] Detalhes do erro:", {
-          message: error.message,
-          code: error.code,
-          request: {
-            url: `${this.baseUrl}/api/v2/auth/login`,
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Accept: "application/json",
-            },
-            data: { username: this.username, password: "[REDACTED]" },
-          },
-          response: error.response
-            ? {
-                status: error.response.status,
-                statusText: error.response.statusText,
-                headers: error.response.headers,
-                data: error.response.data,
-              }
-            : "No response",
-        });
-      } else {
-        console.error("[Nelogica API] Erro não Axios:", error);
-      }
+      // Reset token em caso de erro
+      this.token = null;
+      this.tokenExpiry = null;
 
       throw new Error(`Falha na autenticação: ${error.message}`);
     } finally {
@@ -555,76 +430,45 @@ export class NelogicaApiClient {
    * Executa uma chamada de API garantindo que estamos autenticados
    */
   private async executeApiCall<T>(apiCallFn: () => Promise<T>): Promise<T> {
-    const startTime = Date.now();
-    console.log("[Nelogica API] Iniciando execução de chamada de API");
-
     // Certifique-se de que estamos autenticados
     if (!this.isTokenValid()) {
-      console.log(
-        "[Nelogica API] Token inválido ou expirado, realizando login"
-      );
+      console.log("[Nelogica API] Token expirado, realizando login");
       await this.login();
-    } else {
-      console.log("[Nelogica API] Usando token existente válido");
     }
 
     try {
       // Configure o token de autenticação para esta chamada
       this.apiClient.defaults.headers.common["Authorization"] =
         `Bearer ${this.token}`;
-      console.log("[Nelogica API] Token configurado nos headers");
 
       // Execute a chamada da API
-      console.log("[Nelogica API] Executando chamada à API");
-      const result = await apiCallFn();
-
-      const elapsedTime = Date.now() - startTime;
-      console.log(
-        `[Nelogica API] Chamada concluída com sucesso em ${elapsedTime}ms`
-      );
-
-      return result;
+      return await apiCallFn();
     } catch (error: any) {
-      const elapsedTime = Date.now() - startTime;
-      console.error(
-        `[Nelogica API] Erro na chamada após ${elapsedTime}ms:`,
-        error.message
-      );
-
-      // Se recebemos erro 401, o token pode ter expirado mesmo que achássemos que estava válido
+      // Se recebemos erro 401, o token pode ter expirado
       if (error.response?.status === 401) {
-        console.log(
-          "[Nelogica API] Token expirado (401), obtendo novo token..."
-        );
+        console.log("[Nelogica API] Token expirado (401), renovando token");
         this.token = null;
         this.tokenExpiry = null;
         await this.login();
 
         // Tenta novamente com o novo token
-        console.log("[Nelogica API] Tentando novamente com novo token");
         this.apiClient.defaults.headers.common["Authorization"] =
           `Bearer ${this.token}`;
         return await apiCallFn();
       }
 
-      // Log detalhado de erros de rede
-      if (error.isAxiosError) {
-        console.error("[Nelogica API] Detalhes do erro de rede:", {
-          code: error.code,
-          config: {
-            url: error.config?.url,
-            method: error.config?.method,
-            timeout: error.config?.timeout,
-            baseURL: error.config?.baseURL,
-          },
-          response: error.response
-            ? {
-                status: error.response.status,
-                statusText: error.response.statusText,
-                data: error.response.data,
-              }
-            : "Sem resposta",
-        });
+      // Log apenas erros importantes
+      if (error.isAxiosError && error.response) {
+        console.error(
+          `[Nelogica API] Erro HTTP ${error.response.status}: ${error.response.statusText}`
+        );
+        if (error.response.data?.message) {
+          console.error(
+            `[Nelogica API] Mensagem: ${error.response.data.message}`
+          );
+        }
+      } else {
+        console.error(`[Nelogica API] Erro de rede: ${error.message}`);
       }
 
       throw error;
@@ -1037,7 +881,7 @@ export class NelogicaApiClient {
   }
 
   /**
-   * Lista assinaturas com logs detalhados
+   * Lista assinaturas filtradas por planId específico
    */
   public async listSubscriptions(params?: {
     customerId?: string;
@@ -1045,201 +889,77 @@ export class NelogicaApiClient {
     pageNumber?: number;
     pageSize?: number;
   }): Promise<NelogicaSubscriptionsResponse> {
-    const requestId = `api_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // ID do plano específico da TradersHouse
+    const TARGET_PLAN_ID = "c0dc847f-8fe6-4a31-ab14-62c2977ed4a0";
 
     try {
-      console.log(
-        `🔌 [${requestId}] ===== NELOGICA API CLIENT: LIST SUBSCRIPTIONS =====`
-      );
-
-      // Log dos parâmetros
-      console.log(
-        `📝 [${requestId}] Parâmetros da chamada:`,
-        params || "Nenhum parâmetro"
-      );
+      console.log("[Nelogica API] Listando assinaturas");
 
       // Construir query string
       const queryParams = new URLSearchParams();
-      if (params?.customerId) {
+      if (params?.customerId)
         queryParams.append("customerId", params.customerId);
-        console.log(
-          `🔍 [${requestId}] Filtro customerId: ${params.customerId}`
-        );
-      }
-      if (params?.account) {
-        queryParams.append("account", params.account);
-        console.log(`🔍 [${requestId}] Filtro account: ${params.account}`);
-      }
-      if (params?.pageNumber) {
+      if (params?.account) queryParams.append("account", params.account);
+      if (params?.pageNumber)
         queryParams.append("pageNumber", params.pageNumber.toString());
-        console.log(`📄 [${requestId}] Página: ${params.pageNumber}`);
-      }
-      if (params?.pageSize) {
+      if (params?.pageSize)
         queryParams.append("pageSize", params.pageSize.toString());
-        console.log(`📄 [${requestId}] Tamanho da página: ${params.pageSize}`);
-      }
 
-      // Construir URL final
       const endpoint = "api/v2/manager/subscriptions";
       const queryString = queryParams.toString();
       const url = `${endpoint}${queryString ? `?${queryString}` : ""}`;
 
-      console.log(`🌐 [${requestId}] Base URL: ${this.baseUrl}`);
-      console.log(`🔗 [${requestId}] Endpoint: ${endpoint}`);
-      console.log(
-        `🔗 [${requestId}] Query String: ${queryString || "Nenhuma"}`
-      );
-      console.log(`🔗 [${requestId}] URL Completa: ${this.baseUrl}/${url}`);
-
-      // Verificar autenticação antes da chamada
-      if (!this.isTokenValid()) {
-        console.log(
-          `🔐 [${requestId}] Token inválido ou expirado, fazendo login...`
-        );
-        await this.login();
-        console.log(`✅ [${requestId}] Login realizado com sucesso`);
-      } else {
-        console.log(
-          `✅ [${requestId}] Token válido, prosseguindo com a chamada`
-        );
-      }
-
-      // Log dos headers que serão enviados
-      const headers = {
-        ...this.apiClient.defaults.headers.common,
-        Authorization: `Bearer ${this.token?.substring(0, 20)}...`, // Log parcial do token
-      };
-      console.log(`📋 [${requestId}] Headers da requisição:`, headers);
-
       return await this.executeApiCall(async () => {
-        console.log(`📡 [${requestId}] Iniciando requisição HTTP...`);
-        const startTime = Date.now();
+        const response =
+          await this.apiClient.get<NelogicaSubscriptionsResponse>(url);
 
-        try {
-          const response =
-            await this.apiClient.get<NelogicaSubscriptionsResponse>(url);
-          const duration = Date.now() - startTime;
+        if (response.data.isSuccess && response.data.data?.subscriptions) {
+          const allSubscriptions = response.data.data.subscriptions;
+
+          // Filtrar assinaturas pelo planId específico
+          const filteredSubscriptions = allSubscriptions.filter(
+            (subscription) => subscription.planId === TARGET_PLAN_ID
+          );
 
           console.log(
-            `⏱️  [${requestId}] Requisição HTTP completada em ${duration}ms`
-          );
-          console.log(`📊 [${requestId}] Status HTTP: ${response.status}`);
-          console.log(`📊 [${requestId}] Status Text: ${response.statusText}`);
-
-          // Log dos headers de resposta
-          console.log(
-            `📋 [${requestId}] Headers de resposta:`,
-            response.headers
+            `[Nelogica API] Assinaturas filtradas: ${filteredSubscriptions.length}/${allSubscriptions.length} (planId: ${TARGET_PLAN_ID})`
           );
 
-          // Log da estrutura da resposta
-          console.log(
-            `📄 [${requestId}] Response.data.isSuccess:`,
-            response.data.isSuccess
-          );
-          console.log(
-            `📄 [${requestId}] Response.data.status:`,
-            response.data.status
-          );
-          console.log(
-            `📄 [${requestId}] Response.data.message:`,
-            response.data.message
-          );
-
-          if (response.data.data) {
-            const data = response.data.data;
-            console.log(
-              `📊 [${requestId}] Subscriptions array length:`,
-              data.subscriptions?.length || 0
-            );
-
-            if (data.parameters?.pagination) {
-              console.log(
-                `📄 [${requestId}] Pagination info:`,
-                data.parameters.pagination
-              );
-            }
-
-            if (data.subscriptions && data.subscriptions.length > 0) {
-              console.log(
-                `📋 [${requestId}] Primeira subscription (estrutura):`,
-                {
-                  subscriptionId: data.subscriptions[0].subscriptionId,
-                  licenseId: data.subscriptions[0].licenseId,
-                  customerId: data.subscriptions[0].customerId,
-                  planId: data.subscriptions[0].planId,
-                  createdAt: data.subscriptions[0].createdAt,
-                  accounts: Array.isArray(data.subscriptions[0].accounts)
-                    ? `Array com ${data.subscriptions[0].accounts.length} itens`
-                    : typeof data.subscriptions[0].accounts,
-                }
-              );
-
-              // Log das propriedades disponíveis
-              console.log(
-                `🔍 [${requestId}] Propriedades da primeira subscription:`,
-                Object.keys(data.subscriptions[0])
-              );
-            }
-          }
-
-          console.log(`✅ [${requestId}] ===== SUCESSO API CLIENT =====`);
-          return response.data;
-        } catch (httpError: any) {
-          const duration = Date.now() - startTime;
-
-          console.error(
-            `❌ [${requestId}] ===== ERRO HTTP NA REQUISIÇÃO =====`
-          );
-          console.error(`❌ [${requestId}] Tempo até o erro: ${duration}ms`);
-          console.error(
-            `❌ [${requestId}] Tipo do erro:`,
-            httpError?.constructor?.name || "Unknown"
-          );
-
-          if (httpError.response) {
-            console.error(
-              `🌐 [${requestId}] Status: ${httpError.response.status}`
-            );
-            console.error(
-              `🌐 [${requestId}] Status Text: ${httpError.response.statusText}`
-            );
-            console.error(
-              `🌐 [${requestId}] Headers: ${JSON.stringify(httpError.response.headers)}`
-            );
-            console.error(`🌐 [${requestId}] Data:`, httpError.response.data);
-          } else if (httpError.request) {
-            console.error(
-              `📡 [${requestId}] Request foi feito mas sem resposta`
-            );
-            console.error(`📡 [${requestId}] Request:`, httpError.request);
-          } else {
-            console.error(
-              `⚠️  [${requestId}] Erro ao configurar request:`,
-              httpError.message
-            );
-          }
-
-          if (httpError.code) {
-            console.error(`🏷️  [${requestId}] Error Code:`, httpError.code);
-          }
-
-          console.error(`❌ [${requestId}] ===== FIM ERRO HTTP =====`);
-          throw httpError;
+          // Retornar resposta com assinaturas filtradas
+          return {
+            ...response.data,
+            data: {
+              ...response.data.data,
+              subscriptions: filteredSubscriptions,
+              parameters: {
+                ...response.data.data.parameters,
+                pagination: {
+                  ...response.data.data.parameters.pagination,
+                  totalRecords: filteredSubscriptions.length,
+                  totalPages: Math.ceil(
+                    filteredSubscriptions.length / (params?.pageSize || 10)
+                  ),
+                },
+              },
+            },
+          };
         }
+
+        if (!response.data.isSuccess) {
+          console.warn(
+            `[Nelogica API] Falha ao listar assinaturas: ${response.data.message}`
+          );
+        }
+
+        return response.data;
       });
-    } catch (error) {
-      console.error(`❌ [${requestId}] ===== ERRO GERAL API CLIENT =====`);
-      console.error(`❌ [${requestId}] Erro ao listar assinaturas:`, error);
-
-      if (error instanceof Error) {
-        console.error(`❌ [${requestId}] Stack trace:`, error.stack);
-      }
-
-      console.error(`❌ [${requestId}] ===== FIM ERRO GERAL =====`);
-
+    } catch (error: any) {
+      console.error(
+        "[Nelogica API] Erro ao listar assinaturas:",
+        error.message
+      );
       throw new Error(
-        `Falha ao listar assinaturas: ${error instanceof Error ? error.message : String(error)}`
+        `Falha ao listar assinaturas: ${error.response?.data?.message || error.message}`
       );
     }
   }
