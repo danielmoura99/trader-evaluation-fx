@@ -3,8 +3,16 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { TraderStatus } from "@/app/types";
-import { NelogicaService } from "@/lib/services/nelogica-service";
+import { NelogicaApiClient } from "@/lib/services/nelogica-api-client";
 import { logger } from "@/lib/logger";
+
+// Configurações da API Nelogica
+const NELOGICA_API_URL =
+  process.env.NELOGICA_API_URL || "https://api-broker4-v2.nelogica.com.br";
+const NELOGICA_USERNAME =
+  process.env.NELOGICA_USERNAME || "tradersHouse.hml@nelogica";
+const NELOGICA_PASSWORD =
+  process.env.NELOGICA_PASSWORD || "OJOMy4miz63YLFwOM27ZGTO5n";
 
 export async function getAwaitingClients() {
   return await prisma.client.findMany({
@@ -30,7 +38,7 @@ export async function getEvaluationClients() {
 
 export async function startEvaluation(clientId: string) {
   try {
-    logger.info(`Iniciando avaliação para cliente ${clientId}`);
+    logger.info(`Iniciando avaliação V2 para cliente ${clientId}`);
 
     // Busca o cliente no banco de dados
     const client = await prisma.client.findUnique({
@@ -44,15 +52,14 @@ export async function startEvaluation(clientId: string) {
 
     // Verifica se o cliente já tem uma plataforma ativa
     if (client.nelogicaLicenseId && client.nelogicaAccount) {
-      // Se já possui os dados da Nelogica, apenas atualiza o status
+      // Se já possui os dados da Nelogica, apenas atualiza o status e datas
       logger.info(
         `Cliente ${clientId} já possui dados na Nelogica, apenas atualizando status`
       );
 
       const startDate = new Date();
-      // Calculando a data de fim (60 dias após o início)
       const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + 60);
+      endDate.setDate(endDate.getDate() + 30); // 30 dias de avaliação
 
       await prisma.client.update({
         where: { id: clientId },
@@ -62,17 +69,23 @@ export async function startEvaluation(clientId: string) {
           endDate,
         },
       });
+
+      logger.info(`Status do cliente ${clientId} atualizado para IN_PROGRESS`);
     } else {
-      // Se não possui dados da Nelogica, inicia o fluxo completo
+      // Se não possui dados da Nelogica, inicia o fluxo completo V2
       logger.info(
-        `Iniciando fluxo completo na Nelogica para cliente ${clientId}`
+        `Iniciando fluxo completo V2 na Nelogica para cliente ${clientId}`
       );
 
-      // Instancia o serviço Nelogica
-      const nelogicaService = new NelogicaService();
+      // Instancia o cliente da API Nelogica V2
+      const nelogicaClient = new NelogicaApiClient(
+        NELOGICA_API_URL,
+        NELOGICA_USERNAME,
+        NELOGICA_PASSWORD
+      );
 
-      // Inicia o fluxo completo de liberação de plataforma
-      await nelogicaService.releaseTraderPlatform({
+      // Executa o fluxo completo de liberação da plataforma V2
+      await nelogicaClient.releaseTraderPlatformV2({
         id: client.id,
         name: client.name,
         email: client.email,
@@ -84,17 +97,21 @@ export async function startEvaluation(clientId: string) {
         plan: client.plan,
       });
 
-      // O serviço já atualizou o status do cliente no banco
+      logger.info(
+        `Fluxo completo V2 executado com sucesso para cliente ${clientId}`
+      );
     }
 
     // Revalida a rota para atualizar a UI
     revalidatePath("/evaluations");
     return true;
   } catch (error) {
-    logger.error(
-      `Erro ao iniciar avaliação: ${error instanceof Error ? error.message : "Erro desconhecido"}`
-    );
-    throw error; // Propaga o erro para ser tratado pelo componente
+    const errorMessage =
+      error instanceof Error ? error.message : "Erro desconhecido";
+    logger.error(`Erro ao iniciar avaliação V2: ${errorMessage}`);
+
+    // Re-throw o erro para que a UI possa capturar e exibir
+    throw new Error(`Falha ao iniciar avaliação: ${errorMessage}`);
   }
 }
 

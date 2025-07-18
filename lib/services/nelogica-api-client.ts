@@ -195,6 +195,40 @@ export interface PaginationParams {
   pageSize?: number;
 }
 
+/// Processo completo do release da plataforma Trader
+
+// 1. ADICIONAR ESTAS INTERFACES ANTES DA CLASSE NelogicaApiClient
+
+/**
+ * Interface para parâmetros da função releaseTraderPlatformV2
+ */
+export interface ReleaseTraderPlatformParams {
+  id: string;
+  name: string;
+  email: string;
+  cpf: string;
+  phone: string;
+  birthDate: Date;
+  address?: string;
+  zipCode?: string;
+  plan: string;
+}
+
+/**
+ * Interface para o resultado da liberação da plataforma
+ */
+export interface ReleaseTraderPlatformResult {
+  customerId: string;
+  subscriptionId: string;
+  licenseId: string;
+  account: string;
+  profileId: string;
+  startDate: Date;
+  endDate: Date;
+}
+
+///// encerramento do release da plataforma Trader
+
 /**
  * Cliente principal para a API da Nelogica
  */
@@ -1029,6 +1063,198 @@ export class NelogicaApiClient {
       throw new Error(
         `Falha ao obter detalhes do cliente: ${error.response?.data?.message || error.message}`
       );
+    }
+  }
+
+  /**
+   * FLUXO COMPLETO DE LIBERAÇÃO DE PLATAFORMA PARA TRADER - API V2
+   *
+   * Implementa o fluxo completo seguindo a documentação da API V2:
+   * 1. Register Subscription (Endpoint 2)
+   * 2. Create Account (Endpoint 3) com profileId fixo
+   * 3. Atualizar banco local com status IN_PROGRESS
+   *
+   * @param params - Dados do cliente para liberação da plataforma
+   * @returns Resultado com IDs criados na Nelogica e datas de avaliação
+   */
+  public async releaseTraderPlatformV2(
+    params: ReleaseTraderPlatformParams
+  ): Promise<ReleaseTraderPlatformResult> {
+    const requestId = `release_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    try {
+      console.log(
+        `🚀 [${requestId}] ===== INÍCIO LIBERAÇÃO PLATAFORMA V2 =====`
+      );
+      console.log(
+        `👤 [${requestId}] Cliente: ${params.name} (${params.email})`
+      );
+      console.log(`📋 [${requestId}] Plano: ${params.plan}`);
+      console.log(`🆔 [${requestId}] Client ID: ${params.id}`);
+
+      // ============ ETAPA 1: PREPARAR DADOS ============
+      console.log(`📝 [${requestId}] Etapa 1: Preparando dados do cliente...`);
+
+      // Dividir nome em primeiro e último nome
+      const nameParts = params.name.trim().split(" ");
+      const firstName = nameParts[0];
+      const lastName = nameParts.slice(1).join(" ") || firstName;
+
+      // Limpar CPF (remover formatação)
+      const cleanCpf = params.cpf.replace(/\D/g, "");
+
+      // Profile ID fixo conforme solicitado
+      const profileId = "af0cd162-d774-475e-866f-315ff1932223";
+
+      console.log(`✅ [${requestId}] Dados processados:`, {
+        firstName,
+        lastName,
+        cpf: cleanCpf,
+        profileId,
+      });
+
+      // ============ ETAPA 2: CRIAR SUBSCRIPTION ============
+      console.log(
+        `🔄 [${requestId}] Etapa 2: Criando assinatura na Nelogica...`
+      );
+
+      // Reutiliza interface existente CreateSubscriptionParams
+      const subscriptionParams: CreateSubscriptionParams = {
+        planId: "c0dc847f-8fe6-4a31-ab14-62c2977ed4a0", // ID padrão do plano
+        firstName,
+        lastName,
+        email: params.email,
+        birth: params.birthDate.toISOString().split("T")[0], // YYYY-MM-DD
+        gender: 1, // Assumindo masculino por padrão
+        PhoneNumber: params.phone,
+        countryNationality: "BRA",
+        document: {
+          documentType: 1, // 1 = CPF
+          document: cleanCpf,
+        },
+        address: {
+          street: params.address || "Endereço não informado",
+          number: "S/N",
+          neighborhood: "Centro",
+          city: "São Paulo",
+          state: "SP",
+          country: "BRA",
+          zipCode: params.zipCode || "01000-000",
+        },
+      };
+
+      const subscriptionResult =
+        await this.createSubscription(subscriptionParams);
+
+      if (!subscriptionResult.isSuccess) {
+        throw new Error(
+          `Falha ao criar assinatura: ${subscriptionResult.message}`
+        );
+      }
+
+      const { customerId, subscriptionId, licenseId } = subscriptionResult.data;
+
+      console.log(`✅ [${requestId}] Assinatura criada com sucesso:`, {
+        customerId,
+        subscriptionId,
+        licenseId,
+      });
+
+      // ============ ETAPA 3: CRIAR CONTA DEMO COM RISCO APLICADO ============
+      console.log(
+        `🔄 [${requestId}] Etapa 3: Criando conta DEMO com risco aplicado...`
+      );
+
+      // Reutiliza interface existente CreateAccountParams
+      // 🎯 O risco é aplicado automaticamente ao passar o profileId!
+      const accountParams: CreateAccountParams[] = [
+        {
+          name: `Conta ${params.plan} - ${firstName}`,
+          profileId: profileId, // 👈 RISCO APLICADO AUTOMATICAMENTE AQUI!
+          accountType: 0, // 0 = Demo/Desafio
+        },
+      ];
+
+      const accountResult = await this.createAccount(licenseId, accountParams);
+
+      if (!accountResult.isSuccess) {
+        throw new Error(`Falha ao criar conta: ${accountResult.message}`);
+      }
+
+      const account = accountResult.data[0].account;
+      const assignedProfileId = accountResult.data[0].profileId;
+
+      console.log(`✅ [${requestId}] Conta DEMO criada com risco aplicado:`, {
+        account,
+        profileId: assignedProfileId,
+      });
+
+      // ============ ETAPA 4: DEFINIR PERÍODO DE AVALIAÇÃO ============
+      const startDate = new Date();
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + 60); // 60 dias de avaliação
+
+      console.log(`📅 [${requestId}] Período de avaliação definido:`, {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        dias: 60,
+      });
+
+      // ============ ETAPA 5: ATUALIZAR BANCO LOCAL ============
+      console.log(
+        `💾 [${requestId}] Etapa 5: Atualizando banco de dados local...`
+      );
+
+      // Importar dinamicamente para evitar problemas de dependência circular
+      const { prisma } = await import("@/lib/prisma");
+      const { TraderStatus } = await import("@/app/types");
+
+      await prisma.client.update({
+        where: { id: params.id },
+        data: {
+          traderStatus: TraderStatus.IN_PROGRESS,
+          nelogicaCustomerId: customerId,
+          nelogicaSubscriptionId: subscriptionId,
+          nelogicaLicenseId: licenseId,
+          nelogicaAccount: account,
+          startDate,
+          endDate,
+        },
+      });
+
+      console.log(`✅ [${requestId}] Cliente atualizado no banco local`);
+
+      // ============ RESULTADO FINAL ============
+      const result: ReleaseTraderPlatformResult = {
+        customerId,
+        subscriptionId,
+        licenseId,
+        account,
+        profileId: assignedProfileId,
+        startDate,
+        endDate,
+      };
+
+      console.log(
+        `🎉 [${requestId}] ===== LIBERAÇÃO CONCLUÍDA COM SUCESSO =====`
+      );
+      console.log(`📊 [${requestId}] Resultado final:`, result);
+
+      return result;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Erro desconhecido";
+      console.error(
+        `❌ [${requestId}] ERRO na liberação da plataforma:`,
+        errorMessage
+      );
+
+      // Log detalhado do erro para debug
+      if (error instanceof Error) {
+        console.error(`🔍 [${requestId}] Stack trace:`, error.stack);
+      }
+
+      throw new Error(`Falha na liberação da plataforma V2: ${errorMessage}`);
     }
   }
 }
