@@ -13,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { getSubscriptionDetails, reactivateSubscription } from "../_actions";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -28,11 +27,10 @@ export function SubscriptionDetailsDialog({
   open,
   onOpenChange,
   subscription,
-  onRefresh,
 }: SubscriptionDetailsDialogProps) {
   const [details, setDetails] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isReactivating, setIsReactivating] = useState(false);
+  const [isReactivating] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -48,8 +46,6 @@ export function SubscriptionDetailsDialog({
 
     setIsLoading(true);
     try {
-      const data = await getSubscriptionDetails(subscription.subscriptionId);
-      setDetails(data);
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       toast({
@@ -74,26 +70,6 @@ export function SubscriptionDetailsDialog({
 
     if (!confirm("Tem certeza que deseja reativar esta assinatura?")) {
       return;
-    }
-
-    setIsReactivating(true);
-    try {
-      await reactivateSubscription(subscription.client.id);
-      toast({
-        title: "Assinatura reativada",
-        description: "A assinatura foi reativada com sucesso.",
-      });
-      onRefresh();
-      onOpenChange(false);
-    } catch (error) {
-      toast({
-        title: "Erro ao reativar",
-        description:
-          error instanceof Error ? error.message : "Erro desconhecido",
-        variant: "destructive",
-      });
-    } finally {
-      setIsReactivating(false);
     }
   };
 

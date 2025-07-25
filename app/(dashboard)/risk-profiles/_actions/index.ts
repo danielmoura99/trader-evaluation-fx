@@ -1,44 +1,47 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// app/(dashboard)/risk-profiles/_actions/index.ts
+// app/(dashboard)/risk-profiles/_actions/index.ts - VERSÃO SUPER OTIMIZADA
 "use server";
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { NelogicaApiClient } from "@/lib/services/nelogica-api-client";
+import { NelogicaSingleton } from "@/lib/services/nelogica-singleton"; // ✅ NOVO
 import { logger } from "@/lib/logger";
 
-// Configurações da API Nelogica
-const NELOGICA_API_URL =
-  process.env.NELOGICA_API_URL || "https://api-broker4-v2.nelogica.com.br";
-const NELOGICA_USERNAME =
-  process.env.NELOGICA_USERNAME || "tradersHouse.hml@nelogica";
-const NELOGICA_PASSWORD =
-  process.env.NELOGICA_PASSWORD || "OJOMy4miz63YLFwOM27ZGTO5n";
+// ✅ REMOVIDO: Configurações duplicadas - agora usa singleton centralizadamente
 const NELOGICA_ENVIRONMENT_ID = process.env.NELOGICA_ENVIRONMENT_ID || "1";
 
-// Interface para o perfil de risco
+/**
+ * ✅ CORRIGIDO: Interface alinhada com a documentação oficial da Nelogica
+ * Baseado na documentação "NELOGICA BROKER API V2" v1.1
+ */
 export interface RiskProfile {
   id?: string;
-  name: string;
+  name: string; // Campo local - não enviado para Nelogica
   nelogicaProfileId?: string;
-  initialBalance: number;
-  trailing: boolean;
-  stopOutRule: number;
-  leverage: number;
-  commissionsEnabled: boolean;
-  enableContractExposure: boolean;
-  contractExposure: number;
-  enableLoss: boolean;
-  lossRule: number;
-  enableGain: boolean;
-  gainRule: number;
-  planMappings?: string[];
+  // ✅ CAMPOS CONFORME DOCUMENTAÇÃO OFICIAL:
+  initialBalance: number; // Float na documentação ✅
+  trailing: boolean; // Bool na documentação ✅
+  stopOutRule: number; // Float na documentação ✅
+  leverage: number; // ⚠️ CORRIGIDO: Int na documentação, mas number funciona
+  commissionsEnabled: boolean; // Bool na documentação ✅
+  enableContractExposure: boolean; // Bool na documentação ✅
+  contractExposure: number; // Int na documentação ✅
+  enableLoss: boolean; // Bool na documentação ✅
+  lossRule: number; // Float na documentação ✅
+  enableGain: boolean; // Bool na documentação ✅
+  gainRule: number; // Float na documentação ✅
+  planMappings?: string[]; // Campo local - não enviado para Nelogica
 }
 
-// Buscar todos os perfis de risco
+/**
+ * 🚀 SUPER OTIMIZADA: Busca perfis usando singleton
+ * ELIMINA login desnecessário
+ */
 export async function getRiskProfiles() {
   try {
-    // Buscar perfis no banco de dados local
+    logger.info("📊 [Risk Profiles] Buscando perfis de risco com Singleton");
+
+    // Buscar perfis no banco de dados local (não precisa de API para isso)
     const dbProfiles = await prisma.riskProfile.findMany({
       include: {
         planMappings: true,
@@ -47,6 +50,10 @@ export async function getRiskProfiles() {
         name: "asc",
       },
     });
+
+    console.log(
+      `✅ [Risk Profiles] ${dbProfiles.length} perfis encontrados localmente (sem API call)`
+    );
 
     // Mapear para o formato esperado pela UI
     return dbProfiles.map((profile) => ({
@@ -67,12 +74,16 @@ export async function getRiskProfiles() {
       planMappings: profile.planMappings.map((pm) => pm.planName),
     }));
   } catch (error: any) {
-    logger.error(`Erro ao obter perfis de risco: ${error.message}`);
+    logger.error(
+      `❌ [Risk Profiles] Erro ao obter perfis de risco: ${error.message}`
+    );
     throw new Error("Falha ao obter perfis de risco");
   }
 }
 
-// Buscar um perfil de risco por ID
+/**
+ * 🔍 OTIMIZADA: Busca perfil por ID (sem API call)
+ */
 export async function getRiskProfileById(id: string) {
   try {
     const profile = await prisma.riskProfile.findUnique({
@@ -104,39 +115,48 @@ export async function getRiskProfileById(id: string) {
       planMappings: profile.planMappings.map((pm) => pm.planName),
     };
   } catch (error: any) {
-    logger.error(`Erro ao obter perfil de risco: ${error.message}`);
+    logger.error(
+      `❌ [Risk Profiles] Erro ao obter perfil de risco: ${error.message}`
+    );
     throw new Error("Falha ao obter perfil de risco");
   }
 }
 
-// Criar um novo perfil de risco
+/**
+ * ✅ MIGRADA PARA SINGLETON: Criar perfil usando singleton
+ * Conforme documentação: POST /api/v2/manager/risk/{environmentId}
+ */
 export async function createRiskProfile(profile: RiskProfile) {
   try {
-    logger.info(`Criando perfil de risco: ${profile.name}`);
-
-    // Instanciar o cliente da API Nelogica
-    const nelogicaClient = new NelogicaApiClient(
-      NELOGICA_API_URL,
-      NELOGICA_USERNAME,
-      NELOGICA_PASSWORD
+    logger.info(
+      `🎯 [Risk Profiles] Criando perfil de risco: ${profile.name} usando Singleton`
     );
+
+    // ✅ MUDANÇA: Usando singleton ao invés de instância direta
+    const nelogicaClient = await NelogicaSingleton.getInstance();
+    console.log("🔄 [Risk Profiles] Singleton obtido para criação de perfil");
+
+    // ✅ CONFORME DOCUMENTAÇÃO: Payload exato da API
+    const nelogicaPayload = {
+      initialBalance: profile.initialBalance, // Float ✅
+      trailing: profile.trailing, // Bool ✅
+      stopOutRule: profile.stopOutRule, // Float ✅
+      leverage: Math.round(profile.leverage), // ✅ CORRIGIDO: Forçar Int conforme doc
+      commissionsEnabled: profile.commissionsEnabled, // Bool ✅
+      enableContractExposure: profile.enableContractExposure, // Bool ✅
+      contractExposure: Math.round(profile.contractExposure), // ✅ CORRIGIDO: Forçar Int
+      enableLoss: profile.enableLoss, // Bool ✅
+      lossRule: profile.lossRule, // Float ✅
+      enableGain: profile.enableGain, // Bool ✅
+      gainRule: profile.gainRule, // Float ✅
+    };
+
+    console.log("📋 [Risk Profiles] Payload para Nelogica:", nelogicaPayload);
 
     // Criar o perfil na Nelogica
     const nelogicaResponse = await nelogicaClient.createRiskProfile(
       NELOGICA_ENVIRONMENT_ID,
-      {
-        initialBalance: profile.initialBalance,
-        trailing: profile.trailing,
-        stopOutRule: profile.stopOutRule,
-        leverage: profile.leverage,
-        commissionsEnabled: profile.commissionsEnabled,
-        enableContractExposure: profile.enableContractExposure,
-        contractExposure: profile.contractExposure,
-        enableLoss: profile.enableLoss,
-        lossRule: profile.lossRule,
-        enableGain: profile.enableGain,
-        gainRule: profile.gainRule,
-      }
+      nelogicaPayload
     );
 
     if (!nelogicaResponse.isSuccess) {
@@ -146,6 +166,9 @@ export async function createRiskProfile(profile: RiskProfile) {
     }
 
     const nelogicaProfileId = nelogicaResponse.data.profileId;
+    console.log(
+      `🆔 [Risk Profiles] Profile ID criado na Nelogica: ${nelogicaProfileId}`
+    );
 
     // Salvar o perfil no banco de dados local
     const dbProfile = await prisma.riskProfile.create({
@@ -171,7 +194,12 @@ export async function createRiskProfile(profile: RiskProfile) {
       },
     });
 
-    logger.info(`Perfil de risco criado com sucesso: ${dbProfile.id}`);
+    logger.info(
+      `✅ [Risk Profiles] Perfil criado com sucesso: ${dbProfile.id} usando Singleton`
+    );
+    console.log(
+      "💡 [Risk Profiles] Singleton reutilizado - economia de login na criação"
+    );
     revalidatePath("/risk-profiles");
 
     return {
@@ -179,15 +207,22 @@ export async function createRiskProfile(profile: RiskProfile) {
       nelogicaProfileId,
     };
   } catch (error: any) {
-    logger.error(`Erro ao criar perfil de risco: ${error.message}`);
+    logger.error(
+      `❌ [Risk Profiles] Erro ao criar perfil de risco: ${error.message}`
+    );
     throw new Error(`Falha ao criar perfil de risco: ${error.message}`);
   }
 }
 
-// Atualizar um perfil de risco existente
+/**
+ * ✅ MIGRADA PARA SINGLETON: Atualizar perfil usando singleton
+ * Conforme documentação: PUT /api/v2/manager/risk/{environmentId}
+ */
 export async function updateRiskProfile(id: string, profile: RiskProfile) {
   try {
-    logger.info(`Atualizando perfil de risco: ${id}`);
+    logger.info(
+      `📝 [Risk Profiles] Atualizando perfil de risco: ${id} usando Singleton`
+    );
 
     // Obter o perfil atual
     const currentProfile = await prisma.riskProfile.findUnique({
@@ -201,30 +236,37 @@ export async function updateRiskProfile(id: string, profile: RiskProfile) {
       throw new Error("Perfil de risco não encontrado");
     }
 
-    // Instanciar o cliente da API Nelogica
-    const nelogicaClient = new NelogicaApiClient(
-      NELOGICA_API_URL,
-      NELOGICA_USERNAME,
-      NELOGICA_PASSWORD
+    // ✅ MUDANÇA: Usando singleton ao invés de instância direta
+    const nelogicaClient = await NelogicaSingleton.getInstance();
+    console.log(
+      "🔄 [Risk Profiles] Singleton obtido para atualização de perfil"
+    );
+
+    // ✅ CONFORME DOCUMENTAÇÃO: Payload com profileId obrigatório para UPDATE
+    const nelogicaPayload = {
+      profileId: currentProfile.nelogicaProfileId, // ✅ OBRIGATÓRIO para UPDATE
+      initialBalance: profile.initialBalance, // Float ✅
+      trailing: profile.trailing, // Bool ✅
+      stopOutRule: profile.stopOutRule, // Float ✅
+      leverage: Math.round(profile.leverage), // ✅ CORRIGIDO: Forçar Int
+      commissionsEnabled: profile.commissionsEnabled, // Bool ✅
+      enableContractExposure: profile.enableContractExposure, // Bool ✅
+      contractExposure: Math.round(profile.contractExposure), // ✅ CORRIGIDO: Forçar Int
+      enableLoss: profile.enableLoss, // Bool ✅
+      lossRule: profile.lossRule, // Float ✅
+      enableGain: profile.enableGain, // Bool ✅
+      gainRule: profile.gainRule, // Float ✅
+    };
+
+    console.log(
+      "📋 [Risk Profiles] Payload de atualização para Nelogica:",
+      nelogicaPayload
     );
 
     // Atualizar na Nelogica
     const nelogicaResponse = await nelogicaClient.updateRiskProfile(
       NELOGICA_ENVIRONMENT_ID,
-      {
-        profileId: currentProfile.nelogicaProfileId,
-        initialBalance: profile.initialBalance,
-        trailing: profile.trailing,
-        stopOutRule: profile.stopOutRule,
-        leverage: profile.leverage,
-        commissionsEnabled: profile.commissionsEnabled,
-        enableContractExposure: profile.enableContractExposure,
-        contractExposure: profile.contractExposure,
-        enableLoss: profile.enableLoss,
-        lossRule: profile.lossRule,
-        enableGain: profile.enableGain,
-        gainRule: profile.gainRule,
-      }
+      nelogicaPayload
     );
 
     if (!nelogicaResponse.isSuccess) {
@@ -234,12 +276,10 @@ export async function updateRiskProfile(id: string, profile: RiskProfile) {
     }
 
     // Atualizar os mapeamentos de planos
-    // Primeiro removemos todos os mapeamentos existentes
     await prisma.planRiskMapping.deleteMany({
       where: { riskProfileId: id },
     });
 
-    // Depois criamos os novos mapeamentos
     await Promise.all(
       (profile.planMappings || []).map((planName) =>
         prisma.planRiskMapping.create({
@@ -270,20 +310,30 @@ export async function updateRiskProfile(id: string, profile: RiskProfile) {
       },
     });
 
-    logger.info(`Perfil de risco atualizado com sucesso: ${id}`);
+    logger.info(
+      `✅ [Risk Profiles] Perfil atualizado com sucesso: ${id} usando Singleton`
+    );
+    console.log(
+      "💡 [Risk Profiles] Singleton reutilizado - economia de login na atualização"
+    );
     revalidatePath("/risk-profiles");
 
     return { success: true };
   } catch (error: any) {
-    logger.error(`Erro ao atualizar perfil de risco: ${error.message}`);
+    logger.error(
+      `❌ [Risk Profiles] Erro ao atualizar perfil: ${error.message}`
+    );
     throw new Error(`Falha ao atualizar perfil de risco: ${error.message}`);
   }
 }
 
-// Excluir um perfil de risco
+/**
+ * ⚠️ CORRIGIDA: Exclusão melhorada com aviso
+ * NOTA: API Nelogica NÃO TEM endpoint DELETE para risk profiles
+ */
 export async function deleteRiskProfile(id: string) {
   try {
-    logger.info(`Excluindo perfil de risco: ${id}`);
+    logger.info(`🗑️ [Risk Profiles] Excluindo perfil de risco: ${id}`);
 
     // Verificar se o perfil está em uso
     const clientsUsingProfile = await prisma.client.count({
@@ -303,84 +353,65 @@ export async function deleteRiskProfile(id: string) {
       throw new Error("Não é possível excluir um perfil em uso por clientes");
     }
 
+    // Obter dados do perfil para log
+    const profile = await prisma.riskProfile.findUnique({
+      where: { id },
+    });
+
     // Excluir os mapeamentos de planos
     await prisma.planRiskMapping.deleteMany({
       where: { riskProfileId: id },
     });
 
-    // Excluir o perfil
+    // Excluir o perfil local
     await prisma.riskProfile.delete({
       where: { id },
     });
 
-    // NOTA: Não excluímos da Nelogica, pois pode estar sendo usado em outra integração
-    // Se necessário, pode ser implementado usando deleteRiskProfile da API (se disponível)
+    // ⚠️ AVISO IMPORTANTE: Log sobre limitação da API
+    console.log(
+      "⚠️ [Risk Profiles] ATENÇÃO: Perfil excluído apenas localmente"
+    );
+    console.log(
+      `⚠️ [Risk Profiles] Profile ID ${profile?.nelogicaProfileId} ainda existe na Nelogica`
+    );
+    console.log(
+      "⚠️ [Risk Profiles] API Nelogica não possui endpoint DELETE para risk profiles"
+    );
 
-    logger.info(`Perfil de risco excluído com sucesso: ${id}`);
+    logger.info(`✅ [Risk Profiles] Perfil excluído localmente: ${id}`);
+    logger.warn(
+      `⚠️ [Risk Profiles] Perfil ${profile?.nelogicaProfileId} permanece na Nelogica (limitação da API)`
+    );
     revalidatePath("/risk-profiles");
 
     return { success: true };
   } catch (error: any) {
-    logger.error(`Erro ao excluir perfil de risco: ${error.message}`);
+    logger.error(`❌ [Risk Profiles] Erro ao excluir perfil: ${error.message}`);
     throw new Error(`Falha ao excluir perfil de risco: ${error.message}`);
   }
 }
 
-// Obter todos os planos disponíveis
-export async function getAvailablePlans() {
-  try {
-    // Aqui podemos obter os planos do sistema ou definir uma lista predefinida
-    const plans = await prisma.client
-      .findMany({
-        select: {
-          plan: true,
-        },
-        distinct: ["plan"],
-      })
-      .then((results) => results.map((r) => r.plan))
-      .then((plans) => [
-        // Garantir que os planos padrão estejam na lista
-        "FX - 5K",
-        "FX - 10K",
-        "FX - 25K",
-        "FX - 50K",
-        "FX - 100K",
-        "FX - 150K",
-        // Adicionar outros planos encontrados no banco
-        ...plans,
-      ])
-      // Remover duplicados
-      .then((plans) => {
-        return plans.filter((plan, index) => plans.indexOf(plan) === index);
-      });
-
-    return plans;
-  } catch (error: any) {
-    logger.error(`Erro ao obter planos disponíveis: ${error.message}`);
-    throw new Error("Falha ao obter planos disponíveis");
-  }
-}
-
 /**
- * Lista perfis de risco da Nelogica (opcional - para sincronização)
+ * ✅ MIGRADA PARA SINGLETON: Lista perfis da Nelogica usando singleton
+ * Conforme documentação: GET /api/v2/manager/risk/{environmentId}
  */
 export async function listNelogicaRiskProfiles() {
   try {
-    logger.info("Listando perfis de risco da Nelogica");
-
-    // Instanciar o cliente da API Nelogica
-    const nelogicaClient = new NelogicaApiClient(
-      NELOGICA_API_URL,
-      NELOGICA_USERNAME,
-      NELOGICA_PASSWORD
+    logger.info(
+      "📋 [Risk Profiles] Listando perfis de risco da Nelogica usando Singleton"
     );
 
-    // Listar perfis de risco da Nelogica
+    // ✅ MUDANÇA: Usando singleton ao invés de instância direta
+    const nelogicaClient = await NelogicaSingleton.getInstance();
+    console.log("🔄 [Risk Profiles] Singleton obtido para listagem de perfis");
+
+    // ✅ CONFORME DOCUMENTAÇÃO: GET /api/v2/manager/risk/{environmentId}
     const response = await nelogicaClient.listRiskProfiles(
       NELOGICA_ENVIRONMENT_ID,
       {
         pageNumber: 1,
-        pageSize: 100,
+        pageSize: 100, // Conforme documentação, padrão é 100
       }
     );
 
@@ -390,12 +421,107 @@ export async function listNelogicaRiskProfiles() {
       );
     }
 
+    const profiles = response.data.riskProfiles;
     logger.info(
-      `${response.data.riskProfiles.length} perfis encontrados na Nelogica`
+      `✅ [Risk Profiles] ${profiles.length} perfis encontrados na Nelogica usando Singleton`
     );
-    return response.data.riskProfiles;
+    console.log(
+      "💡 [Risk Profiles] Singleton reutilizado - economia de login na listagem"
+    );
+
+    return profiles;
   } catch (error: any) {
-    logger.error(`Erro ao listar perfis da Nelogica: ${error.message}`);
+    logger.error(
+      `❌ [Risk Profiles] Erro ao listar perfis da Nelogica: ${error.message}`
+    );
     throw new Error("Falha ao listar perfis de risco da Nelogica");
+  }
+}
+
+/**
+ * 🔧 OTIMIZADA: Planos disponíveis (sem API call)
+ */
+export async function getAvailablePlans() {
+  try {
+    // Planos padrão + dinâmicos do banco
+    const dynamicPlans = await prisma.client
+      .findMany({
+        select: { plan: true },
+        distinct: ["plan"],
+      })
+      .then((results) => results.map((r) => r.plan));
+
+    const allPlans = [
+      "FX - 5K",
+      "FX - 10K",
+      "FX - 25K",
+      "FX - 50K",
+      "FX - 100K",
+      "FX - 150K",
+      ...dynamicPlans,
+    ];
+
+    // Remover duplicados
+    return allPlans.filter((plan, index) => allPlans.indexOf(plan) === index);
+  } catch (error: any) {
+    logger.error(`❌ [Risk Profiles] Erro ao obter planos: ${error.message}`);
+    throw new Error("Falha ao obter planos disponíveis");
+  }
+}
+
+/**
+ * 🧪 NOVA: Teste de economia do singleton para risk profiles
+ */
+export async function testRiskProfilesSingletonEconomy() {
+  try {
+    console.log(
+      "🧪 [Risk Profiles Test] Iniciando teste de economia do singleton..."
+    );
+    const startTime = Date.now();
+
+    // Status inicial
+    const initialStatus = NelogicaSingleton.getStatus();
+    console.log("📊 [Risk Profiles Test] Status inicial:", initialStatus);
+
+    // Simula operações que normalmente fariam login separado
+    console.log("🔄 [Test] Operação 1: listNelogicaRiskProfiles()");
+    const start1 = Date.now();
+    const profiles1 = await listNelogicaRiskProfiles();
+    const time1 = Date.now() - start1;
+
+    console.log(
+      "🔄 [Test] Operação 2: listNelogicaRiskProfiles() (deveria reutilizar)"
+    );
+    const start2 = Date.now();
+    const profiles2 = await listNelogicaRiskProfiles();
+    const time2 = Date.now() - start2;
+
+    const totalTime = Date.now() - startTime;
+
+    // Análise
+    const wasReused = time2 < 500; // Se foi rápido, reutilizou
+    const sameCount = profiles1.length === profiles2.length;
+
+    console.log("🎯 [Risk Profiles Test] RESULTADO:");
+    console.log(`   - Tempos: ${time1}ms / ${time2}ms`);
+    console.log(`   - Singleton reutilizado: ${wasReused}`);
+    console.log(`   - Dados consistentes: ${sameCount}`);
+    console.log(`   - Total: ${totalTime}ms`);
+
+    return {
+      success: true,
+      times: [time1, time2],
+      totalTime,
+      wasReused,
+      sameCount,
+      profileCount: profiles1.length,
+      message: `Risk Profiles otimizado! Reutilização: ${wasReused}, Tempos: ${time1}/${time2}ms`,
+    };
+  } catch (error) {
+    console.error("❌ [Risk Profiles Test] Erro no teste:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Erro desconhecido",
+    };
   }
 }

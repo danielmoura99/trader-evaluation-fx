@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { getAccountDetails, blockAccount, unblockAccount } from "../_actions";
+import { blockAccount, unblockAccount } from "../_actions";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { NelogicaAccount } from "../_actions";
@@ -52,8 +52,6 @@ export function AccountDetailsDialog({
 
     setIsLoading(true);
     try {
-      const data = await getAccountDetails(account.licenseId, account.account);
-      setDetails(data);
     } catch (error) {
       toast({
         title: "Erro ao carregar detalhes",

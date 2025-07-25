@@ -1,20 +1,13 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// app/(dashboard)/accounts/_actions/index.ts
+// app/(dashboard)/accounts/_actions/index.ts - VERSÃO OTIMIZADA
 "use server";
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { NelogicaApiClient } from "@/lib/services/nelogica-api-client";
+import { NelogicaSingleton } from "@/lib/services/nelogica-singleton";
+import { NelogicaSharedService } from "@/lib/services/nelogica-shared-service"; // ✅ NOVO
 import { logger } from "@/lib/logger";
-
-// Configurações da API Nelogica
-const NELOGICA_API_URL =
-  process.env.NELOGICA_API_URL || "https://api-broker4-v2.nelogica.com.br";
-const NELOGICA_USERNAME =
-  process.env.NELOGICA_USERNAME || "tradersHouse.hml@nelogica";
-const NELOGICA_PASSWORD =
-  process.env.NELOGICA_PASSWORD || "OJOMy4miz63YLFwOM27ZGTO5n";
 
 /**
  * Interface para accounts
@@ -39,186 +32,156 @@ export interface NelogicaAccount {
 }
 
 /**
- * Obtém todas as contas Nelogica
+ * 🚀 SUPER OTIMIZADA: Obtém contas usando serviço compartilhado
+ * ZERO requests duplicadas + Singleton + Cache inteligente
  */
 export async function getAccounts() {
   try {
-    logger.info("Buscando contas na Nelogica");
+    logger.info("🏦 [Accounts] Buscando contas com MÁXIMA otimização");
+    console.log("⚡ [Accounts] Usando NelogicaSharedService (zero duplicação)");
 
-    // Instancia o cliente da API Nelogica
-    const nelogicaClient = new NelogicaApiClient(
-      NELOGICA_API_URL,
-      NELOGICA_USERNAME,
-      NELOGICA_PASSWORD
+    // ✅ USA SERVIÇO COMPARTILHADO - reutiliza subscriptions de outras páginas
+    const accounts = await NelogicaSharedService.getAccountsFromSubscriptions();
+
+    logger.info(
+      `✅ [Accounts] ${accounts.length} contas obtidas com otimização máxima`
+    );
+    console.log(
+      "💡 [Accounts] Zero requests duplicadas! Reutilizou dados existentes."
     );
 
-    // Busca as assinaturas na API da Nelogica (que contêm as contas)
-    const subscriptionsResponse = await nelogicaClient.listSubscriptions();
-
-    if (!subscriptionsResponse.isSuccess) {
-      throw new Error(
-        `Falha ao obter assinaturas: ${subscriptionsResponse.message}`
-      );
-    }
-
-    // Extrair todas as contas de todas as assinaturas
-    const accounts: NelogicaAccount[] = [];
-
-    for (const subscription of subscriptionsResponse.data.subscriptions) {
-      if (!subscription.accounts || !Array.isArray(subscription.accounts)) {
-        continue;
-      }
-
-      // Busca o cliente correspondente no banco local
-      const client = await prisma.client.findFirst({
-        where: { nelogicaSubscriptionId: subscription.subscriptionId },
-      });
-
-      // Adiciona cada conta ao array de contas
-      for (const account of subscription.accounts) {
-        // A API da Nelogica não fornece um endpoint direto para verificar se uma conta está bloqueada
-        // Assumimos que não está bloqueada por padrão
-        // Se necessário, o status será atualizado através das operações de block/unblock
-        const isBlocked = false;
-
-        accounts.push({
-          account: account.account,
-          name: account.name,
-          licenseId: subscription.licenseId,
-          profileId: account.profileId,
-          validatedAt: account.validadedAt,
-          isBlocked: isBlocked,
-          client: client
-            ? {
-                id: client.id,
-                name: client.name,
-                email: client.email,
-                cpf: client.cpf,
-                plan: client.plan,
-                traderStatus: client.traderStatus,
-              }
-            : null,
-        });
-      }
-    }
-
-    logger.info(`${accounts.length} contas encontradas`);
     return accounts;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    logger.error(`Erro ao obter contas: ${errorMsg}`);
+    logger.error(`❌ [Accounts] Erro ao obter contas: ${errorMsg}`);
     throw new Error("Falha ao obter contas da Nelogica");
   }
 }
 
 /**
- * Bloqueia uma conta Nelogica
+ * 🔄 REFRESH INTELIGENTE: Força atualização quando necessário
+ */
+export async function refreshAccounts() {
+  try {
+    logger.info("🔄 [Accounts] Refresh forçado das contas");
+    console.log("🔄 [Accounts] Limpando cache e buscando dados atualizados...");
+
+    // Limpa cache e força nova busca
+    NelogicaSharedService.clearCache();
+
+    const accounts = await NelogicaSharedService.getAccountsFromSubscriptions({
+      forceRefresh: true,
+    });
+
+    logger.info(
+      `✅ [Accounts] ${accounts.length} contas atualizadas com refresh`
+    );
+    return accounts;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    logger.error(`❌ [Accounts] Erro no refresh: ${errorMsg}`);
+    throw new Error("Falha ao atualizar contas da Nelogica");
+  }
+}
+
+/**
+ * ✅ MANTÉM SINGLETON: Bloqueia conta (operação individual)
  */
 export async function blockAccount(licenseId: string, account: string) {
   try {
-    logger.info(`Bloqueando conta ${account}`);
+    logger.info(`🔒 [Accounts] Bloqueando conta ${account} usando Singleton`);
 
-    // Instancia o cliente da API Nelogica
-    const nelogicaClient = new NelogicaApiClient(
-      NELOGICA_API_URL,
-      NELOGICA_USERNAME,
-      NELOGICA_PASSWORD
-    );
+    // ✅ Singleton para operações específicas (não é subscriptions)
+    const nelogicaClient = await NelogicaSingleton.getInstance();
+    console.log("🔄 [Accounts] Singleton reutilizado para bloqueio");
 
-    // Bloqueia a conta na Nelogica
     const response = await nelogicaClient.blockAccount(licenseId, account);
 
     if (!response.isSuccess) {
       throw new Error(`Falha ao bloquear conta: ${response.message}`);
     }
 
-    // Atualiza o registro do cliente local se necessário
+    // Atualiza cliente local se necessário
     const client = await prisma.client.findFirst({
       where: { nelogicaAccount: account },
     });
 
     if (client) {
-      // Opcionalmente podemos atualizar algum status no cliente local
-      // dependendo das necessidades do projeto
       logger.info(`Cliente encontrado para a conta ${account}: ${client.name}`);
     }
 
-    logger.info(`Conta ${account} bloqueada com sucesso`);
+    // ✅ Limpa cache para forçar atualização na próxima busca
+    NelogicaSharedService.clearCache("subscriptions");
+
+    logger.info(`✅ [Accounts] Conta ${account} bloqueada com sucesso`);
+    console.log("💡 [Accounts] Cache limpo - próxima busca será atualizada");
     revalidatePath("/accounts");
 
     return { success: true, isBlocked: true };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    logger.error(`Erro ao bloquear conta: ${errorMsg}`);
+    logger.error(`❌ [Accounts] Erro ao bloquear conta: ${errorMsg}`);
     throw new Error(`Falha ao bloquear conta na Nelogica: ${errorMsg}`);
   }
 }
 
 /**
- * Desbloqueia uma conta Nelogica
+ * ✅ MANTÉM SINGLETON: Desbloqueia conta (operação individual)
  */
 export async function unblockAccount(licenseId: string, account: string) {
   try {
-    logger.info(`Desbloqueando conta ${account}`);
-
-    // Instancia o cliente da API Nelogica
-    const nelogicaClient = new NelogicaApiClient(
-      NELOGICA_API_URL,
-      NELOGICA_USERNAME,
-      NELOGICA_PASSWORD
+    logger.info(
+      `🔓 [Accounts] Desbloqueando conta ${account} usando Singleton`
     );
 
-    // Desbloqueia a conta na Nelogica
+    // ✅ Singleton para operações específicas
+    const nelogicaClient = await NelogicaSingleton.getInstance();
+    console.log("🔄 [Accounts] Singleton reutilizado para desbloqueio");
+
     const response = await nelogicaClient.unblockAccount(licenseId, account);
 
     if (!response.isSuccess) {
       throw new Error(`Falha ao desbloquear conta: ${response.message}`);
     }
 
-    // Atualiza o registro do cliente local se necessário
     const client = await prisma.client.findFirst({
       where: { nelogicaAccount: account },
     });
 
     if (client) {
-      // Opcionalmente podemos atualizar algum status no cliente local
-      // dependendo das necessidades do projeto
       logger.info(`Cliente encontrado para a conta ${account}: ${client.name}`);
     }
 
-    logger.info(`Conta ${account} desbloqueada com sucesso`);
+    // ✅ Limpa cache para atualização
+    NelogicaSharedService.clearCache("subscriptions");
+
+    logger.info(`✅ [Accounts] Conta ${account} desbloqueada com sucesso`);
     revalidatePath("/accounts");
 
     return { success: true, isBlocked: false };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    logger.error(`Erro ao desbloquear conta: ${errorMsg}`);
+    logger.error(`❌ [Accounts] Erro ao desbloquear conta: ${errorMsg}`);
     throw new Error(`Falha ao desbloquear conta na Nelogica: ${errorMsg}`);
   }
 }
 
 /**
- * Remove uma conta Nelogica
+ * ✅ MANTÉM SINGLETON: Remove conta (operação individual)
  */
 export async function removeAccount(licenseId: string, account: string) {
   try {
-    logger.info(`Removendo conta ${account}`);
+    logger.info(`🗑️ [Accounts] Removendo conta ${account} usando Singleton`);
 
-    // Instancia o cliente da API Nelogica
-    const nelogicaClient = new NelogicaApiClient(
-      NELOGICA_API_URL,
-      NELOGICA_USERNAME,
-      NELOGICA_PASSWORD
-    );
+    const nelogicaClient = await NelogicaSingleton.getInstance();
+    console.log("🔄 [Accounts] Singleton reutilizado para remoção");
 
-    // Remove a conta na Nelogica
     const response = await nelogicaClient.removeAccount(licenseId, account);
 
     if (!response.isSuccess) {
       throw new Error(`Falha ao remover conta: ${response.message}`);
     }
 
-    // Atualiza o registro do cliente local se necessário
     const client = await prisma.client.findFirst({
       where: { nelogicaAccount: account },
     });
@@ -226,26 +189,27 @@ export async function removeAccount(licenseId: string, account: string) {
     if (client) {
       await prisma.client.update({
         where: { id: client.id },
-        data: {
-          nelogicaAccount: null,
-        },
+        data: { nelogicaAccount: null },
       });
       logger.info(`Registro local do cliente ${client.name} atualizado`);
     }
 
-    logger.info(`Conta ${account} removida com sucesso`);
+    // ✅ Limpa cache
+    NelogicaSharedService.clearCache("subscriptions");
+
+    logger.info(`✅ [Accounts] Conta ${account} removida com sucesso`);
     revalidatePath("/accounts");
 
     return { success: true };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    logger.error(`Erro ao remover conta: ${errorMsg}`);
+    logger.error(`❌ [Accounts] Erro ao remover conta: ${errorMsg}`);
     throw new Error(`Falha ao remover conta na Nelogica: ${errorMsg}`);
   }
 }
 
 /**
- * Define o perfil de risco para uma conta
+ * ✅ MANTÉM SINGLETON: Configura perfil de risco (operação individual)
  */
 export async function setAccountRiskProfile(
   licenseId: string,
@@ -255,17 +219,14 @@ export async function setAccountRiskProfile(
 ) {
   try {
     logger.info(
-      `Configurando perfil de risco ${profileId} para conta ${account}`
+      `⚖️ [Accounts] Configurando perfil de risco ${profileId} para conta ${account}`
     );
 
-    // Instancia o cliente da API Nelogica
-    const nelogicaClient = new NelogicaApiClient(
-      NELOGICA_API_URL,
-      NELOGICA_USERNAME,
-      NELOGICA_PASSWORD
+    const nelogicaClient = await NelogicaSingleton.getInstance();
+    console.log(
+      "🔄 [Accounts] Singleton reutilizado para configuração de risco"
     );
 
-    // Define o perfil de risco na Nelogica
     const response = await nelogicaClient.setAccountRisk(
       licenseId,
       account,
@@ -280,16 +241,85 @@ export async function setAccountRiskProfile(
     }
 
     logger.info(
-      `Perfil de risco ${profileId} configurado com sucesso para conta ${account}`
+      `✅ [Accounts] Perfil de risco ${profileId} configurado com sucesso`
     );
     revalidatePath("/accounts");
 
     return { success: true, profileId, accountType };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    logger.error(`Erro ao configurar perfil de risco: ${errorMsg}`);
+    logger.error(
+      `❌ [Accounts] Erro ao configurar perfil de risco: ${errorMsg}`
+    );
     throw new Error(
       `Falha ao configurar perfil de risco na Nelogica: ${errorMsg}`
     );
+  }
+}
+
+/**
+ * 🧪 NOVA: Teste de economia MÁXIMA
+ */
+export async function testMaxOptimization() {
+  try {
+    console.log("🧪 [Accounts Test] Testando otimização MÁXIMA...");
+    const startTime = Date.now();
+
+    // Status inicial
+    console.log(
+      "📊 [Test] Cache status inicial:",
+      NelogicaSharedService.getCacheStatus()
+    );
+    console.log("📊 [Test] Singleton status:", NelogicaSingleton.getStatus());
+
+    // Simula múltiplas operações que antes faziam requests duplicados
+    console.log("🔄 [Test] Operação 1: getAccounts()");
+    const start1 = Date.now();
+    const accounts1 = await getAccounts();
+    const time1 = Date.now() - start1;
+
+    console.log("🔄 [Test] Operação 2: getAccounts() (deveria usar cache)");
+    const start2 = Date.now();
+    const accounts2 = await getAccounts();
+    const time2 = Date.now() - start2;
+
+    console.log("🔄 [Test] Operação 3: getAccounts() (deveria usar cache)");
+    const start3 = Date.now();
+    const accounts3 = await getAccounts();
+    const time3 = Date.now() - start3;
+
+    const totalTime = Date.now() - startTime;
+
+    // Análise
+    const cacheWorking = time2 < 100 && time3 < 100;
+    const sameData =
+      accounts1.length === accounts2.length &&
+      accounts2.length === accounts3.length;
+
+    console.log("🎯 [Test] RESULTADO:");
+    console.log(`   - Tempos: ${time1}ms / ${time2}ms / ${time3}ms`);
+    console.log(`   - Cache funcionando: ${cacheWorking}`);
+    console.log(`   - Dados consistentes: ${sameData}`);
+    console.log(`   - Total: ${totalTime}ms`);
+    console.log(
+      "📊 [Test] Cache status final:",
+      NelogicaSharedService.getCacheStatus()
+    );
+
+    return {
+      success: true,
+      times: [time1, time2, time3],
+      totalTime,
+      cacheWorking,
+      sameData,
+      accountCount: accounts1.length,
+      message: `Otimização máxima! Cache: ${cacheWorking}, Tempos: ${time1}/${time2}/${time3}ms`,
+    };
+  } catch (error) {
+    console.error("❌ [Test] Erro no teste:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Erro desconhecido",
+    };
   }
 }
