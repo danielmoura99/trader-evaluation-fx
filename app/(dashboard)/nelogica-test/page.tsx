@@ -27,6 +27,9 @@ import {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   testNelogicaListEnvironments,
   testNelogicaListSubscriptions,
+  testSingletonEconomy,
+  resetSingletonForTesting,
+  getSingletonStatus,
 } from "./_actions/index";
 import { NelogicaMonitor } from "./_components/nelogica-monitor";
 import { RiskProfileForm } from "./_components/risk-profile-form";
@@ -483,6 +486,58 @@ export default function NelogicaTestPage() {
     }
   };
 
+  // Adicione estas funções no componente da página:
+  const handleTestSingleton = async () => {
+    setLoading(true);
+    try {
+      addLog("🧪 Testando economia do singleton...");
+      const result = await testSingletonEconomy();
+
+      if (result.success) {
+        addLog(`✅ Teste do singleton: ${result.totalTime}ms total`);
+        addLog(
+          `🔄 ${result.reuseCount}/${result.results.length} operações reutilizaram a instância`
+        );
+        addLog(`💡 ${result.message}`);
+      } else {
+        addLog(`❌ Falha no teste: ${result.error}`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGetStatus = async () => {
+    setLoading(true);
+    try {
+      addLog("📊 Consultando status do singleton...");
+      const result = await getSingletonStatus();
+
+      if (result.success) {
+        const status = result.status;
+        addLog(`📊 Tem instância: ${status.hasInstance}`);
+        addLog(`📊 Está inicializando: ${status.isInitializing}`);
+        addLog(`📊 Está autenticado: ${status.isAuthenticated}`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetSingleton = async () => {
+    setLoading(true);
+    try {
+      addLog("🔄 Resetando singleton...");
+      const result = await resetSingletonForTesting();
+
+      if (result.success) {
+        addLog(`✅ ${result.message}`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Renderização com visualização aprimorada
   return (
     <div className="space-y-6">
@@ -620,6 +675,30 @@ export default function NelogicaTestPage() {
                       className="w-full"
                     >
                       Testar Autenticação
+                    </Button>
+
+                    <Button
+                      variant="secondary"
+                      onClick={handleTestSingleton}
+                      disabled={loading}
+                    >
+                      🧪 Testar Economia do Singleton
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      onClick={handleGetStatus}
+                      disabled={loading}
+                    >
+                      📊 Status do Singleton
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      onClick={handleResetSingleton}
+                      disabled={loading}
+                    >
+                      🔄 Resetar Singleton
                     </Button>
                   </div>
 

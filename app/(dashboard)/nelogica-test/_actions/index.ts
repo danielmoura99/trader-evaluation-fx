@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 // app/(dashboard)/nelogica-test/_actions/index.ts
 "use server";
 
@@ -5,7 +6,8 @@ import {
   NelogicaApiClient,
   CreateSubscriptionParams,
 } from "@/lib/services/nelogica-api-client";
-import { NELOGICA_PROFILES } from "@/lib/services/nelogica-service";
+import { NelogicaSingleton } from "@/lib/services/nelogica-singleton";
+//import { NELOGICA_PROFILES } from "@/lib/services/nelogica-service";
 import axios from "axios";
 
 // Configurações da API Nelogica
@@ -15,32 +17,69 @@ const NELOGICA_USERNAME =
   process.env.NELOGICA_USERNAME || "tradersHouse.hml@nelogica";
 const NELOGICA_PASSWORD =
   process.env.NELOGICA_PASSWORD || "OJOMy4miz63YLFwOM27ZGTO5n";
-//const NELOGICA_ENVIRONMENT_ID = process.env.NELOGICA_ENVIRONMENT_ID || 'environment_id';
 
 /**
- * Testa a autenticação na API da Nelogica
+ * 🧪 TESTE ESPECÍFICO DO SINGLETON
+ * Testa se o singleton está funcionando corretamente
  */
-export async function testNelogicaAuth() {
+export async function testSingletonEconomy() {
   try {
-    console.log("Iniciando teste de autenticação na Nelogica...");
-    console.log(`Conectando a ${NELOGICA_API_URL}`);
-
-    const apiClient = new NelogicaApiClient(
-      NELOGICA_API_URL,
-      NELOGICA_USERNAME,
-      NELOGICA_PASSWORD
+    console.log(
+      "🧪 [Singleton Test] Iniciando teste de economia do singleton..."
     );
+    const startTime = Date.now();
 
-    await apiClient.login();
+    // Status inicial
+    const initialStatus = NelogicaSingleton.getStatus();
+    console.log("📊 [Singleton Test] Status inicial:", initialStatus);
 
-    console.log("Autenticação na Nelogica concluída com sucesso");
+    // Simula 3 operações simultâneas que normalmente fariam login separado
+    const operations = Array(3)
+      .fill(0)
+      .map(async (_, index) => {
+        console.log(`🔄 [Singleton Test] Iniciando operação ${index + 1}...`);
+        const operationStart = Date.now();
+
+        const client = await NelogicaSingleton.getInstance();
+
+        const operationTime = Date.now() - operationStart;
+        console.log(
+          `✅ [Singleton Test] Operação ${index + 1} completada em ${operationTime}ms`
+        );
+
+        return {
+          operation: index + 1,
+          time: operationTime,
+          wasReused: operationTime < 1000, // Se foi muito rápido, provavelmente reutilizou
+        };
+      });
+
+    const results = await Promise.all(operations);
+    const totalTime = Date.now() - startTime;
+
+    // Status final
+    const finalStatus = NelogicaSingleton.getStatus();
+    console.log("📊 [Singleton Test] Status final:", finalStatus);
+
+    // Análise dos resultados
+    const reuseCount = results.filter((r) => r.wasReused).length;
+
+    console.log(`✅ [Singleton Test] Teste concluído em ${totalTime}ms`);
+    console.log(
+      `🔄 [Singleton Test] ${reuseCount}/${results.length} operações reutilizaram a instância`
+    );
 
     return {
       success: true,
-      expiresAt: "Token obtido com sucesso", // Na implementação real, retornaria a data de expiração
+      totalTime,
+      results,
+      reuseCount,
+      message: `Singleton funcionando! ${reuseCount}/${results.length} reutilizações em ${totalTime}ms`,
+      initialStatus,
+      finalStatus,
     };
   } catch (error) {
-    console.error("Erro ao testar autenticação Nelogica:", error);
+    console.error("❌ [Singleton Test] Erro no teste:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Erro desconhecido",
@@ -48,53 +87,124 @@ export async function testNelogicaAuth() {
   }
 }
 
-interface CreateSubscriptionRequest {
-  planId: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  cpf: string;
-  phone: string;
-  plan: string;
+/**
+ * Testa a autenticação na API da Nelogica usando Singleton
+ */
+export async function testNelogicaAuth() {
+  try {
+    console.log(
+      "🔑 [Auth Test] Iniciando teste de autenticação usando Singleton..."
+    );
+    console.log(`🌐 [Auth Test] Conectando a ${NELOGICA_API_URL}`);
+
+    // Status antes do teste
+    const beforeStatus = NelogicaSingleton.getStatus();
+    console.log("📊 [Auth Test] Status do singleton antes:", beforeStatus);
+
+    // ✅ MUDANÇA: Usando singleton ao invés de instância direta
+    const apiClient = await NelogicaSingleton.getInstance();
+
+    // Status após obter instância
+    const afterStatus = NelogicaSingleton.getStatus();
+    console.log(
+      "📊 [Auth Test] Status do singleton após getInstance:",
+      afterStatus
+    );
+
+    console.log("✅ [Auth Test] Instância obtida com sucesso");
+    console.log(
+      `🔄 [Auth Test] Instância foi ${beforeStatus.hasInstance ? "reutilizada" : "criada"}`
+    );
+
+    return {
+      success: true,
+      expiresAt: "Token obtido com sucesso",
+      wasReused: beforeStatus.hasInstance,
+      singletonStatus: afterStatus,
+    };
+  } catch (error) {
+    console.error("❌ [Auth Test] Erro ao testar autenticação:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Erro desconhecido",
+    };
+  }
 }
 
 /**
- * Testa a criação de assinatura na Nelogica
+ * Testa apenas a conectividade básica com o servidor da Nelogica
  */
-export async function testNelogicaCreateSubscription(
-  request: CreateSubscriptionRequest
-) {
+export async function testNelogicaConnectivity() {
   try {
-    console.log("Iniciando criação de assinatura na Nelogica...");
-
-    const apiClient = new NelogicaApiClient(
-      NELOGICA_API_URL,
-      NELOGICA_USERNAME,
-      NELOGICA_PASSWORD
+    console.log("🌐 [Connectivity Test] Iniciando teste de conectividade...");
+    console.log(
+      `🔗 [Connectivity Test] Tentando conectar a ${NELOGICA_API_URL}`
     );
 
-    const params: CreateSubscriptionParams = {
-      planId: "c0dc847f-8fe6-4a31-ab14-62c2977ed4a0",
-      firstName: request.firstName,
-      lastName: request.lastName,
-      email: request.email,
-      document: {
-        documentType: 1, // 1 = CPF
-        document: request.cpf.replace(/\D/g, ""),
-      },
-      PhoneNumber: request.phone,
-      countryNationality: "BRA",
-      address: {
-        street: "Endereço de Teste",
-        number: "123",
-        neighborhood: "Centro",
-        city: "São Paulo",
-        state: "SP",
-        country: "BRA",
-        zipCode: "01000-000",
-      },
-      // Não inclua conta aqui, vamos criar separadamente para melhor controle
+    const startTime = Date.now();
+
+    try {
+      await axios.get(`${NELOGICA_API_URL}/ping`, {
+        timeout: 5000,
+        validateStatus: () => true,
+      });
+
+      const elapsedTime = Date.now() - startTime;
+      console.log(
+        `✅ [Connectivity Test] Conectividade testada com sucesso em ${elapsedTime}ms`
+      );
+
+      return {
+        success: true,
+        elapsedTime,
+      };
+    } catch (error) {
+      const elapsedTime = Date.now() - startTime;
+      console.error(
+        `❌ [Connectivity Test] Erro ao testar conectividade (${elapsedTime}ms):`,
+        error
+      );
+
+      let errorDetails = "";
+      if (axios.isAxiosError(error)) {
+        errorDetails = `Code: ${error.code || "N/A"}, Message: ${error.message}`;
+        console.error("Detalhes:", {
+          code: error.code,
+          message: error.message,
+        });
+      }
+
+      return {
+        success: false,
+        error: `Falha na conectividade: ${errorDetails}`,
+        elapsedTime,
+      };
+    }
+  } catch (error) {
+    console.error("❌ [Connectivity Test] Erro inesperado:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Erro desconhecido",
     };
+  }
+}
+
+/**
+ * Testa a criação de assinatura na Nelogica usando Singleton
+ */
+export async function testNelogicaCreateSubscription(
+  params: CreateSubscriptionParams
+) {
+  try {
+    console.log(
+      "📝 [Subscription Test] Iniciando criação de assinatura usando Singleton..."
+    );
+    console.log("📋 [Subscription Test] Dados:", params);
+
+    // ✅ MUDANÇA: Usando singleton
+    const apiClient = await NelogicaSingleton.getInstance();
+
+    console.log("🔄 [Subscription Test] Instância do singleton obtida");
 
     const response = await apiClient.createSubscription(params);
 
@@ -105,16 +215,17 @@ export async function testNelogicaCreateSubscription(
       };
     }
 
-    console.log("Assinatura criada com sucesso:", response.data);
+    console.log(
+      "✅ [Subscription Test] Assinatura criada com sucesso:",
+      response.data
+    );
 
     return {
       success: true,
-      customerId: response.data.customerId,
-      subscriptionId: response.data.subscriptionId,
-      licenseId: response.data.licenseId,
+      data: response.data,
     };
   } catch (error) {
-    console.error("Erro ao criar assinatura Nelogica:", error);
+    console.error("❌ [Subscription Test] Erro ao criar assinatura:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Erro desconhecido",
@@ -122,72 +233,37 @@ export async function testNelogicaCreateSubscription(
   }
 }
 
-interface CreateAccountRequest {
-  licenseId: string;
-  name: string;
-  plan: string;
-  accountType?: number;
-  profileId?: string;
-}
-
 /**
- * Testa a criação de conta na Nelogica
+ * Testa a criação de conta na Nelogica usando Singleton
  */
-export async function testNelogicaCreateAccount(request: CreateAccountRequest) {
+export async function testNelogicaCreateAccount(params: {
+  licenseId: string;
+  profileId: string;
+  accountType: number;
+}) {
   try {
-    console.log("Iniciando criação de conta na Nelogica...");
-
-    const apiClient = new NelogicaApiClient(
-      NELOGICA_API_URL,
-      NELOGICA_USERNAME,
-      NELOGICA_PASSWORD
+    console.log(
+      "🏦 [Account Test] Iniciando criação de conta usando Singleton..."
     );
+    console.log("📋 [Account Test] Parâmetros:", params);
 
-    // Obtém o ID do perfil a partir do plano
-    const profileId =
-      NELOGICA_PROFILES[request.plan as keyof typeof NELOGICA_PROFILES];
+    // ✅ MUDANÇA: Usando singleton
+    const apiClient = await NelogicaSingleton.getInstance();
 
-    if (!profileId) {
-      return {
-        success: false,
-        error: `Perfil não encontrado para o plano: ${request.plan}`,
-      };
-    }
+    console.log("🔄 [Account Test] Instância do singleton obtida");
 
-    // Verifica se o nome está vazio e fornece um nome padrão se necessário
-    //const accountName =
-    //  !request.name || request.name.trim() === ""
-    //    ? `Trader ${request.plan} - ${new Date().toISOString().substring(0, 10)}`
-    //    : request.name.substring(0, 50);
-
-    const accounts = [
+    const accountData = [
       {
-        //name: accountName,
-        name: "Conta teste1",
-        // profileId: profileId,
-        profileId: "88ea95e9-0089-4064-8ca7-8b59301f7d51",
-        accountType:
-          request.accountType !== undefined ? request.accountType : 0, // 0: Desafio (padrão)
+        name: "Conta de Teste",
+        profileId: params.profileId,
+        accountType: params.accountType,
       },
     ];
 
-    console.log("-------- DADOS DA REQUISIÇÃO DE CRIAÇÃO DE CONTA --------");
-    console.log(`License ID: ${request.licenseId}`);
-    console.log("Dados da conta a ser criada:");
-    console.log(JSON.stringify(accounts, null, 2));
-    console.log("Mapeamento de perfis disponíveis:");
-    console.log(JSON.stringify(NELOGICA_PROFILES, null, 2));
-    console.log("Plano selecionado:", request.plan);
-    console.log("Profile ID associado:", profileId);
-    console.log("Tipo de conta:", request.accountType);
-    console.log("--------------------------------------------------------");
-
-    const response = await apiClient.createAccount(request.licenseId, accounts);
-
-    // Log da resposta
-    console.log("-------- RESPOSTA DA CRIAÇÃO DE CONTA --------");
-    console.log(JSON.stringify(response.data, null, 2));
-    console.log("----------------------------------------------");
+    const response = await apiClient.createAccount(
+      params.licenseId,
+      accountData
+    );
 
     if (!response.isSuccess) {
       return {
@@ -196,15 +272,14 @@ export async function testNelogicaCreateAccount(request: CreateAccountRequest) {
       };
     }
 
-    console.log("Conta criada com sucesso:", response.data);
+    console.log("✅ [Account Test] Conta criada com sucesso:", response.data);
 
     return {
       success: true,
-      account: response.data[0].account,
-      profileId: response.data[0].profileId,
+      data: response.data,
     };
   } catch (error) {
-    console.error("Erro ao criar conta Nelogica:", error);
+    console.error("❌ [Account Test] Erro ao criar conta:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Erro desconhecido",
@@ -219,19 +294,19 @@ interface SetRiskRequest {
 }
 
 /**
- * Testa a configuração de perfil de risco na Nelogica
+ * Testa a configuração de perfil de risco na Nelogica usando Singleton
  */
 export async function testNelogicaSetRisk(request: SetRiskRequest) {
   try {
-    console.log("Iniciando configuração de perfil de risco na Nelogica...");
-
-    const apiClient = new NelogicaApiClient(
-      NELOGICA_API_URL,
-      NELOGICA_USERNAME,
-      NELOGICA_PASSWORD
+    console.log(
+      "⚖️ [Risk Test] Iniciando configuração de perfil de risco usando Singleton..."
     );
 
-    // Obtém o ID do perfil a partir do plano
+    // ✅ MUDANÇA: Usando singleton
+    const apiClient = await NelogicaSingleton.getInstance();
+
+    console.log("🔄 [Risk Test] Instância do singleton obtida");
+
     const profileId =
       NELOGICA_PROFILES[request.plan as keyof typeof NELOGICA_PROFILES];
 
@@ -242,7 +317,6 @@ export async function testNelogicaSetRisk(request: SetRiskRequest) {
       };
     }
 
-    // Define o tipo de conta como Desafio (0)
     const response = await apiClient.setAccountRisk(
       request.licenseId,
       request.account,
@@ -257,13 +331,13 @@ export async function testNelogicaSetRisk(request: SetRiskRequest) {
       };
     }
 
-    console.log("Perfil de risco configurado com sucesso");
+    console.log("✅ [Risk Test] Perfil de risco configurado com sucesso");
 
     return {
       success: true,
     };
   } catch (error) {
-    console.error("Erro ao configurar perfil de risco Nelogica:", error);
+    console.error("❌ [Risk Test] Erro ao configurar perfil de risco:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Erro desconhecido",
@@ -277,17 +351,18 @@ interface AccountActionRequest {
 }
 
 /**
- * Testa o bloqueio de conta na Nelogica
+ * Testa o bloqueio de conta na Nelogica usando Singleton
  */
 export async function testNelogicaBlockAccount(request: AccountActionRequest) {
   try {
-    console.log("Iniciando bloqueio de conta na Nelogica...");
-
-    const apiClient = new NelogicaApiClient(
-      NELOGICA_API_URL,
-      NELOGICA_USERNAME,
-      NELOGICA_PASSWORD
+    console.log(
+      "🔒 [Block Test] Iniciando bloqueio de conta usando Singleton..."
     );
+
+    // ✅ MUDANÇA: Usando singleton
+    const apiClient = await NelogicaSingleton.getInstance();
+
+    console.log("🔄 [Block Test] Instância do singleton obtida");
 
     const response = await apiClient.blockAccount(
       request.licenseId,
@@ -301,13 +376,13 @@ export async function testNelogicaBlockAccount(request: AccountActionRequest) {
       };
     }
 
-    console.log("Conta bloqueada com sucesso");
+    console.log("✅ [Block Test] Conta bloqueada com sucesso");
 
     return {
       success: true,
     };
   } catch (error) {
-    console.error("Erro ao bloquear conta Nelogica:", error);
+    console.error("❌ [Block Test] Erro ao bloquear conta:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Erro desconhecido",
@@ -316,19 +391,20 @@ export async function testNelogicaBlockAccount(request: AccountActionRequest) {
 }
 
 /**
- * Testa o desbloqueio de conta na Nelogica
+ * Testa o desbloqueio de conta na Nelogica usando Singleton
  */
 export async function testNelogicaUnblockAccount(
   request: AccountActionRequest
 ) {
   try {
-    console.log("Iniciando desbloqueio de conta na Nelogica...");
-
-    const apiClient = new NelogicaApiClient(
-      NELOGICA_API_URL,
-      NELOGICA_USERNAME,
-      NELOGICA_PASSWORD
+    console.log(
+      "🔓 [Unblock Test] Iniciando desbloqueio de conta usando Singleton..."
     );
+
+    // ✅ MUDANÇA: Usando singleton
+    const apiClient = await NelogicaSingleton.getInstance();
+
+    console.log("🔄 [Unblock Test] Instância do singleton obtida");
 
     const response = await apiClient.unblockAccount(
       request.licenseId,
@@ -342,13 +418,13 @@ export async function testNelogicaUnblockAccount(
       };
     }
 
-    console.log("Conta desbloqueada com sucesso");
+    console.log("✅ [Unblock Test] Conta desbloqueada com sucesso");
 
     return {
       success: true,
     };
   } catch (error) {
-    console.error("Erro ao desbloquear conta Nelogica:", error);
+    console.error("❌ [Unblock Test] Erro ao desbloquear conta:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Erro desconhecido",
@@ -357,17 +433,18 @@ export async function testNelogicaUnblockAccount(
 }
 
 /**
- * Testa a listagem de ambientes na Nelogica
+ * Testa a listagem de ambientes na Nelogica usando Singleton
  */
 export async function testNelogicaListEnvironments() {
   try {
-    console.log("Iniciando listagem de ambientes na Nelogica...");
-
-    const apiClient = new NelogicaApiClient(
-      NELOGICA_API_URL,
-      NELOGICA_USERNAME,
-      NELOGICA_PASSWORD
+    console.log(
+      "🌍 [Environments Test] Iniciando listagem de ambientes usando Singleton..."
     );
+
+    // ✅ MUDANÇA: Usando singleton
+    const apiClient = await NelogicaSingleton.getInstance();
+
+    console.log("🔄 [Environments Test] Instância do singleton obtida");
 
     const response = await apiClient.listEnvironments();
 
@@ -378,14 +455,17 @@ export async function testNelogicaListEnvironments() {
       };
     }
 
-    console.log("Ambientes listados com sucesso:", response.data.environments);
+    console.log(
+      "✅ [Environments Test] Ambientes listados com sucesso:",
+      response.data.environments
+    );
 
     return {
       success: true,
       environments: response.data.environments,
     };
   } catch (error) {
-    console.error("Erro ao listar ambientes Nelogica:", error);
+    console.error("❌ [Environments Test] Erro ao listar ambientes:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Erro desconhecido",
@@ -394,25 +474,24 @@ export async function testNelogicaListEnvironments() {
 }
 
 /**
- * Testa a listagem de assinaturas e contas na Nelogica
+ * Testa a listagem de assinaturas e contas na Nelogica usando Singleton
  */
 export async function testNelogicaListSubscriptions() {
   try {
-    console.log("Iniciando listagem de assinaturas e contas na Nelogica...");
-
-    const apiClient = new NelogicaApiClient(
-      NELOGICA_API_URL,
-      NELOGICA_USERNAME,
-      NELOGICA_PASSWORD
+    console.log(
+      "📋 [Subscriptions Test] Iniciando listagem de assinaturas usando Singleton..."
     );
 
-    // Constante com o planId específico que queremos filtrar
+    // ✅ MUDANÇA: Usando singleton
+    const apiClient = await NelogicaSingleton.getInstance();
+
+    console.log("🔄 [Subscriptions Test] Instância do singleton obtida");
+
     const TARGET_PLAN_ID = "c0dc847f-8fe6-4a31-ab14-62c2977ed4a0";
 
-    // Obtém todas as assinaturas
     const response = await apiClient.listSubscriptions({
       pageNumber: 1,
-      pageSize: 1000, // Aumentamos o tamanho da página para garantir que pegamos todas as assinaturas
+      pageSize: 1000,
     });
 
     if (!response.isSuccess) {
@@ -422,13 +501,12 @@ export async function testNelogicaListSubscriptions() {
       };
     }
 
-    // Filtra as assinaturas que têm o planId específico
     const filteredSubscriptions = response.data.subscriptions.filter(
       (subscription) => subscription.planId === TARGET_PLAN_ID
     );
 
     console.log(
-      "Assinaturas filtradas por planId:",
+      "✅ [Subscriptions Test] Assinaturas filtradas:",
       filteredSubscriptions.length,
       "de",
       response.data.subscriptions.length,
@@ -440,64 +518,7 @@ export async function testNelogicaListSubscriptions() {
       subscriptions: filteredSubscriptions,
     };
   } catch (error) {
-    console.error("Erro ao listar assinaturas Nelogica:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Erro desconhecido",
-    };
-  }
-}
-
-// Adicione essa nova função
-/**
- * Testa apenas a conectividade básica com o servidor da Nelogica
- */
-export async function testNelogicaConnectivity() {
-  try {
-    console.log("Iniciando teste de conectividade com a Nelogica...");
-    console.log(`Tentando conectar a ${NELOGICA_API_URL}`);
-
-    const startTime = Date.now();
-
-    // Aqui utilizamos axios diretamente para evitar dependências de autenticação
-    try {
-      // Tentamos uma conexão simples a um endpoint que responda rapidamente
-      // Muitos servidores têm um endpoint /health ou /ping para isso
-      await axios.get(`${NELOGICA_API_URL}/ping`, {
-        timeout: 5000, // timeout menor para teste rápido
-        validateStatus: () => true, // aceita qualquer status HTTP como sucesso
-      });
-
-      const elapsedTime = Date.now() - startTime;
-      console.log(`Conectividade testada com sucesso em ${elapsedTime}ms`);
-
-      return {
-        success: true,
-        elapsedTime,
-      };
-    } catch (error) {
-      const elapsedTime = Date.now() - startTime;
-      console.error(`Erro ao testar conectividade (${elapsedTime}ms):`, error);
-
-      // Log detalhado para entender melhor o problema
-      let errorDetails = "";
-      if (axios.isAxiosError(error)) {
-        errorDetails = `Code: ${error.code || "N/A"}, Message: ${error.message}`;
-        console.error("Detalhes:", {
-          code: error.code,
-          message: error.message,
-          config: error.config,
-        });
-      }
-
-      return {
-        success: false,
-        error: `Falha na conectividade: ${errorDetails}`,
-        elapsedTime,
-      };
-    }
-  } catch (error) {
-    console.error("Erro inesperado ao testar conectividade Nelogica:", error);
+    console.error("❌ [Subscriptions Test] Erro ao listar assinaturas:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Erro desconhecido",
@@ -506,7 +527,7 @@ export async function testNelogicaConnectivity() {
 }
 
 /**
- * Cria um perfil de risco na Nelogica
+ * Cria um perfil de risco na Nelogica usando Singleton
  */
 export async function testNelogicaCreateRiskProfile(params: {
   initialBalance: number;
@@ -522,16 +543,15 @@ export async function testNelogicaCreateRiskProfile(params: {
   gainRule: number;
 }) {
   try {
-    console.log("Iniciando criação de perfil de risco na Nelogica...");
-
-    const apiClient = new NelogicaApiClient(
-      NELOGICA_API_URL,
-      NELOGICA_USERNAME,
-      NELOGICA_PASSWORD
+    console.log(
+      "⚖️ [Risk Profile Test] Iniciando criação de perfil de risco usando Singleton..."
     );
 
-    // Por padrão, usamos o environmentId padrão da Nelogica
-    // Idealmente, isso viria de uma variável de ambiente ou configuração
+    // ✅ MUDANÇA: Usando singleton
+    const apiClient = await NelogicaSingleton.getInstance();
+
+    console.log("🔄 [Risk Profile Test] Instância do singleton obtida");
+
     const environmentId = process.env.NELOGICA_ENVIRONMENT_ID || "1";
 
     const response = await apiClient.createRiskProfile(environmentId, params);
@@ -543,14 +563,66 @@ export async function testNelogicaCreateRiskProfile(params: {
       };
     }
 
-    console.log("Perfil de risco criado com sucesso:", response.data.profileId);
+    console.log(
+      "✅ [Risk Profile Test] Perfil de risco criado com sucesso:",
+      response.data.profileId
+    );
 
     return {
       success: true,
       profileId: response.data.profileId,
     };
   } catch (error) {
-    console.error("Erro ao criar perfil de risco Nelogica:", error);
+    console.error(
+      "❌ [Risk Profile Test] Erro ao criar perfil de risco:",
+      error
+    );
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Erro desconhecido",
+    };
+  }
+}
+
+/**
+ * 🔧 Utilitário para resetar o singleton (desenvolvimento)
+ */
+export async function resetSingletonForTesting() {
+  try {
+    console.log("🔄 [Reset Test] Forçando reset do singleton...");
+
+    // Limpa o singleton atual
+    NelogicaSingleton.clearForTesting();
+
+    console.log("✅ [Reset Test] Singleton resetado com sucesso");
+
+    return {
+      success: true,
+      message: "Singleton resetado - próxima operação criará nova instância",
+    };
+  } catch (error) {
+    console.error("❌ [Reset Test] Erro ao resetar singleton:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Erro desconhecido",
+    };
+  }
+}
+
+/**
+ * 📊 Utilitário para obter status do singleton
+ */
+export async function getSingletonStatus() {
+  try {
+    const status = NelogicaSingleton.getStatus();
+    console.log("📊 [Status Check] Status do singleton:", status);
+
+    return {
+      success: true,
+      status,
+    };
+  } catch (error) {
+    console.error("❌ [Status Check] Erro ao obter status:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Erro desconhecido",

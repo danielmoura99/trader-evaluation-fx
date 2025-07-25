@@ -1104,7 +1104,7 @@ export class NelogicaApiClient {
       const cleanCpf = params.cpf.replace(/\D/g, "");
 
       // Profile ID fixo conforme solicitado
-      const profileId = "af0cd162-d774-475e-866f-315ff1932223";
+      const profileId = "3182c870-22bf-42b1-9ad7-59293fd21563";
 
       console.log(`✅ [${requestId}] Dados processados:`, {
         firstName,
